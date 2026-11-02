@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.3.3 — 2026-11-03
+
+- 允许 agent 自己决定任务名：
+  - 无引号标题时先按内容首行生成临时标题；
+  - followup 明确要求 agent 用 `board.py rename --name` 改成最终名字；
+- 新增 `/tp task rename "新名称"` 与 `board.py rename`；
+- 重命名只改显示名，task id / 目录 / 事件不变。
+
 ## v3.3.2 — 2026-11-03
 
 - 修正 `/tp task new|auto` 无标题时的默认名：

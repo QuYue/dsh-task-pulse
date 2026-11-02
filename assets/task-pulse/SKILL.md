@@ -76,10 +76,13 @@ $BOARD auto --title "内容首行" --reuse
 /tp task update ["标题"] [内容...]  # 继续当前 task，不新建
 /tp task auto ["标题"] [内容...]  # 有 running 当前 task 则 continue，否则 new
 /tp task list          # 当前 session 的任务
+/tp task rename "新名称" # 改当前任务的显示名
 /tp help
 ```
 
 `/task-pulse` 是 skill 入口（模型判断）；`/tp` 是确定性命令。  
+不写引号标题时，命令会先按内容首行生成临时标题；followup 会要求 agent 根据内容自行判断并
+`board.py rename --name "..."` 改成最终名字。  
 一个 DSH session 可以有多个逻辑 project；`/tp task *` 默认作用于 current project。
 
 ## 启动任务（主 agent，任务分配后的第一个动作）

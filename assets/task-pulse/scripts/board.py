@@ -2513,6 +2513,26 @@ def cmd_local_project(args) -> int:
     raise SystemExit("usage: local-project new|use|rename|list|tasks")
 
 
+def cmd_rename(args) -> int:
+    """Rename the current task's display name without changing task id/dir."""
+    run_dir = _require_run(args)
+    name = str(getattr(args, "name", None) or "").strip()
+    if not name:
+        raise SystemExit("rename: --name is required")
+    plan = load_plan(run_dir) or {}
+    old = str(plan.get("name") or "")
+    plan["name"] = name
+    plan["updatedAt"] = iso()
+    save_plan(run_dir, plan)
+    append_event(run_dir, {
+        "agent": slugify(getattr(args, "by", None) or "lead", "agent"),
+        "type": "rename", "note": f"{old} -> {name}",
+    })
+    maybe_render(run_dir, args)
+    print(f"renamed task: {old or run_dir.name} -> {name}")
+    return 0
+
+
 def cmd_close(args) -> int:
     run_dir = _require_run(args)
     plan = load_plan(run_dir) or {}
@@ -2888,6 +2908,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("current", parents=[common], help="show the current task pointer")
     p.set_defaults(func=cmd_current)
+
+    p = sub.add_parser("rename", parents=[common], help="rename the current task")
+    p.add_argument("--name", required=True)
+    p.add_argument("--by")
+    p.set_defaults(func=cmd_rename)
 
     p = sub.add_parser("close", parents=[common], help="close the run")
     p.add_argument("--by", default="lead")

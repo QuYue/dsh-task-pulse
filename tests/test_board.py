@@ -629,6 +629,15 @@ class BoardTestCase(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("superseded", result.stderr)
 
+    def test_rename_current_task_keeps_id(self):
+        self.init()
+        task_id = self.run_dir().name
+        self.cli("rename", "--name", "新任务名")
+        view = self.status()
+        self.assertEqual(view["title"], "新任务名")
+        self.assertEqual(view["id"], task_id)
+        self.assertTrue(self.run_dir().exists())
+
     def test_current_task_pointer(self):
         self.init()
         current = json.loads(self.cli("--json", "current").stdout)

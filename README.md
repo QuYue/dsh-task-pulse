@@ -36,6 +36,7 @@ Session（DSH 会话 / 工作区）
 /tp task update ["标题"] [内容...]
 /tp task auto ["标题"] [内容...]
 /tp task list
+/tp task rename "新名称"
 /tp help
 ```
 
