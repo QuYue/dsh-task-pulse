@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.0.2 — 2026-11-03
+
+- 修复 `/tp` 命令使用 Host 进程 cwd 而不是 DSH Session cwd 的问题；
+- 现在优先读取 `agent.session.header.cwd`，避免任务/数据落到 profile 目录；
+- 修复后 `/tp task new` 会在当前 session 的 workspace 下创建 `.dsh/progress`。
+
 ## v3.0.1 — 2026-11-03
 
 - 修复 sandbox 下 `~/.dsh/progress` 不可写时 `default_home()` 误返回不可写目录，
