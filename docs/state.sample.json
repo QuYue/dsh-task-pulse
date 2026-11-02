@@ -1,113 +1,259 @@
 {
-  "generatedAt": "2026-11-02T16:40:15+08:00",
-  "version": "1",
+  "generatedAt": "2026-11-02T17:45:41+08:00",
+  "version": "1.0",
   "projects": [
     {
-      "id": "demo-wordcount",
-      "name": "Demo · wordcount 重构",
-      "color": "#4f8cff",
+      "id": "sample-session",
+      "name": "示例会话 · wordcount 重构",
+      "color": "#e6c07b",
       "kind": "local",
       "sourceStatus": "ok",
-      "lastActivityAt": "2026-11-02T16:40:12+08:00",
+      "lastActivityAt": "2026-11-02T17:45:40+08:00",
       "runs": [
         {
-          "id": "20261102-163000-a1b2",
-          "projectId": "demo-wordcount",
-          "title": "wordcount 增加 JSON/CSV 输出",
-          "goal": "支持 --json 与 --csv，补齐测试，全量测试通过",
-          "status": "running",
-          "revision": 2,
-          "startedAt": "2026-11-02T16:30:00+08:00",
-          "updatedAt": "2026-11-02T16:40:12+08:00",
-          "completedAt": null,
-          "progress": { "done": 2, "total": 6, "inProgress": 2, "failed": 0, "skipped": 0, "percent": 33 },
-          "agents": [
-            { "id": "lead", "name": "lead", "role": "主控", "color": "#8892a6", "kind": "lead", "status": "idle", "currentStep": null, "currentText": null, "startedAt": null, "lastSeen": "2026-11-02T16:36:40+08:00", "lastSeenAgoSec": 215, "stalled": false },
-            { "id": "coder", "name": "coder", "role": "编程", "color": "#3ddc97", "kind": "teammate", "status": "working", "currentStep": "s3", "currentText": "写 test_json_output 用例", "startedAt": "2026-11-02T16:37:00+08:00", "lastSeen": "2026-11-02T16:40:07+08:00", "lastSeenAgoSec": 8, "stalled": false },
-            { "id": "reviewer", "name": "reviewer", "role": "审查", "color": "#ffb454", "kind": "teammate", "status": "working", "currentStep": "s4", "currentText": "审查 s2 的实现与边界", "startedAt": "2026-11-02T16:35:20+08:00", "lastSeen": "2026-11-02T16:39:54+08:00", "lastSeenAgoSec": 21, "stalled": false },
-            { "id": "bg-1", "name": "bg-1", "role": "后台任务", "color": "#c792ea", "kind": "job", "status": "idle", "currentStep": null, "currentText": null, "startedAt": null, "lastSeen": "2026-11-02T16:31:02+08:00", "lastSeenAgoSec": 553, "stalled": false }
-          ],
-          "phases": [
-            { "id": "p1", "title": "调研", "status": "done", "stepIds": ["s1"], "done": 1, "total": 1 },
-            { "id": "p2", "title": "实现", "status": "in_progress", "stepIds": ["s2", "s3", "s4", "s6"], "done": 1, "total": 4 },
-            { "id": "p3", "title": "验证", "status": "pending", "stepIds": ["s5"], "done": 0, "total": 1 }
-          ],
-          "steps": [
-            { "id": "s1", "phaseId": "p1", "title": "读现有代码与测试", "owner": "lead", "status": "done", "size": "S", "acceptance": "列出改动点", "startedAt": "2026-11-02T16:30:40+08:00", "endedAt": "2026-11-02T16:33:40+08:00", "elapsedMs": 180000, "blockedBy": [], "note": "", "evidence": ["notes/wordcount-notes.md"], "jobId": null },
-            { "id": "s2", "phaseId": "p2", "title": "实现 --json 参数", "owner": "coder", "status": "done", "size": "M", "acceptance": "CLI 输出合法 JSON", "startedAt": "2026-11-02T16:33:30+08:00", "endedAt": "2026-11-02T16:40:30+08:00", "elapsedMs": 420000, "blockedBy": [], "note": "", "evidence": ["task/wordcount.py"], "jobId": null },
-            { "id": "s3", "phaseId": "p2", "title": "补 JSON 输出测试", "owner": "coder", "status": "in_progress", "size": "M", "acceptance": "新增用例全绿", "startedAt": "2026-11-02T16:37:00+08:00", "endedAt": null, "elapsedMs": 192000, "blockedBy": [], "note": "", "evidence": [], "jobId": null },
-            { "id": "s4", "phaseId": "p2", "title": "审查实现", "owner": "reviewer", "status": "in_progress", "size": "S", "acceptance": "无阻塞性问题", "startedAt": "2026-11-02T16:35:20+08:00", "endedAt": null, "elapsedMs": 292000, "blockedBy": [], "note": "", "evidence": [], "jobId": null },
-            { "id": "s5", "phaseId": "p3", "title": "跑全量测试", "owner": "bg-1", "status": "pending", "size": "S", "acceptance": "pytest 全绿", "startedAt": null, "endedAt": null, "elapsedMs": null, "blockedBy": ["s3"], "note": "", "evidence": [], "jobId": "bg-1" },
-            { "id": "s6", "phaseId": "p2", "title": "实现 --csv 参数", "owner": "coder", "status": "pending", "size": "M", "acceptance": "输出合法 CSV", "startedAt": null, "endedAt": null, "elapsedMs": null, "blockedBy": [], "note": "rev2 新增，等待 coder 释放", "evidence": [], "jobId": null }
-          ],
-          "events": [
-            { "uuid": "e13", "ts": "2026-11-02T16:40:12+08:00", "agent": "coder", "type": "heartbeat", "stepId": "s3", "current": "写 test_json_output 用例", "note": "" },
-            { "uuid": "e12", "ts": "2026-11-02T16:39:54+08:00", "agent": "reviewer", "type": "heartbeat", "stepId": "s4", "current": "审查 s2 的实现与边界", "note": "" },
-            { "uuid": "e11", "ts": "2026-11-02T16:37:00+08:00", "agent": "coder", "type": "start", "stepId": "s3", "note": "" },
-            { "uuid": "e10", "ts": "2026-11-02T16:36:40+08:00", "agent": "coder", "type": "done", "stepId": "s2", "note": "json 输出与 --json 帮助已加", "evidence": ["task/wordcount.py"] },
-            { "uuid": "e9", "ts": "2026-11-02T16:35:20+08:00", "agent": "reviewer", "type": "start", "stepId": "s4", "note": "" },
-            { "uuid": "e8", "ts": "2026-11-02T16:34:10+08:00", "agent": "lead", "type": "plan_revise", "stepId": null, "note": "用户追加 CSV 需求，计划升到 v2" },
-            { "uuid": "e7", "ts": "2026-11-02T16:33:30+08:00", "agent": "coder", "type": "start", "stepId": "s2", "note": "" },
-            { "uuid": "e6", "ts": "2026-11-02T16:32:10+08:00", "agent": "lead", "type": "done", "stepId": "s1", "note": "改动点已整理", "evidence": ["notes/wordcount-notes.md"] },
-            { "uuid": "e5", "ts": "2026-11-02T16:30:40+08:00", "agent": "lead", "type": "start", "stepId": "s1", "note": "" },
-            { "uuid": "e4", "ts": "2026-11-02T16:30:00+08:00", "agent": "lead", "type": "init", "stepId": null, "note": "计划 v1" }
-          ],
-          "changes": [
-            { "rev": 2, "at": "2026-11-02T16:34:10+08:00", "by": "lead", "reason": "用户追加 CSV 需求", "added": ["s6"], "removed": [], "changed": [] },
-            { "rev": 1, "at": "2026-11-02T16:30:00+08:00", "by": "lead", "reason": "初版计划", "added": ["s1", "s2", "s3", "s4", "s5"], "removed": [], "changed": [] }
-          ],
-          "urls": { "page": "/r/demo-wordcount/20261102-163000-a1b2", "boardMd": "demo/demo_a/.dsh/progress/runs/20261102-163000-a1b2/BOARD.md" }
-        }
-      ]
-    },
-    {
-      "id": "demo-remote",
-      "name": "Demo · 远程订单迁移",
-      "color": "#a06bff",
-      "kind": "ingest",
-      "sourceStatus": "ok",
-      "lastActivityAt": "2026-11-02T16:39:30+08:00",
-      "runs": [
-        {
-          "id": "20261102-163200-c9d8",
-          "projectId": "demo-remote",
-          "title": "订单库迁移 dry-run",
-          "goal": "完成 dry-run 并产出校验报告",
+          "id": "20261102-174540-48db",
+          "projectId": "sample-session",
+          "sessionId": "sample-session",
+          "title": "17:45 · 示例任务：给 wordcount 加 JSON 输出",
+          "taskTitle": "示例任务：给 wordcount 加 JSON 输出",
+          "goal": "支持 --json 并补齐测试",
           "status": "running",
           "revision": 1,
-          "startedAt": "2026-11-02T16:32:00+08:00",
-          "updatedAt": "2026-11-02T16:39:30+08:00",
+          "startedAt": "2026-11-02T17:45:40+08:00",
+          "updatedAt": "2026-11-02T17:45:40+08:00",
           "completedAt": null,
-          "progress": { "done": 1, "total": 4, "inProgress": 2, "failed": 0, "skipped": 0, "percent": 25 },
+          "progress": {
+            "done": 1,
+            "total": 4,
+            "inProgress": 1,
+            "failed": 0,
+            "skipped": 0,
+            "percent": 25
+          },
           "agents": [
-            { "id": "server-lead", "name": "server-lead", "role": "主控", "color": "#8892a6", "kind": "lead", "status": "idle", "currentStep": null, "currentText": null, "startedAt": null, "lastSeen": "2026-11-02T16:37:00+08:00", "lastSeenAgoSec": 195, "stalled": false },
-            { "id": "server-coder", "name": "server-coder", "role": "编程", "color": "#3ddc97", "kind": "teammate", "status": "working", "currentStep": "r2", "currentText": "执行 dry-run 迁移", "startedAt": "2026-11-02T16:35:00+08:00", "lastSeen": "2026-11-02T16:39:22+08:00", "lastSeenAgoSec": 8, "stalled": false },
-            { "id": "server-reviewer", "name": "server-reviewer", "role": "审查", "color": "#ffb454", "kind": "teammate", "status": "working", "currentStep": "r3", "currentText": "审查校验脚本", "startedAt": "2026-11-02T16:36:10+08:00", "lastSeen": "2026-11-02T16:39:01+08:00", "lastSeenAgoSec": 29, "stalled": false }
+            {
+              "id": "lead",
+              "name": "lead",
+              "role": "主控",
+              "color": "#39c5cf",
+              "kind": "lead",
+              "status": "idle",
+              "currentStep": null,
+              "currentText": null,
+              "startedAt": null,
+              "lastSeen": "2026-11-02T17:45:40+08:00",
+              "lastSeenAgoSec": 1,
+              "stalled": false
+            },
+            {
+              "id": "coder",
+              "name": "coder",
+              "role": "编程",
+              "color": "#8892a6",
+              "kind": "teammate",
+              "status": "working",
+              "currentStep": "s2",
+              "currentText": "实现 JSON 序列化",
+              "startedAt": "2026-11-02T17:45:40+08:00",
+              "lastSeen": "2026-11-02T17:45:40+08:00",
+              "lastSeenAgoSec": 1,
+              "stalled": false
+            },
+            {
+              "id": "tester",
+              "name": "tester",
+              "role": "测试",
+              "color": "#4f8cff",
+              "kind": "teammate",
+              "status": "idle",
+              "currentStep": null,
+              "currentText": null,
+              "startedAt": null,
+              "lastSeen": null,
+              "lastSeenAgoSec": null,
+              "stalled": false
+            }
           ],
           "phases": [
-            { "id": "p1", "title": "预检", "status": "done", "stepIds": ["r1"], "done": 1, "total": 1 },
-            { "id": "p2", "title": "迁移", "status": "in_progress", "stepIds": ["r2"], "done": 0, "total": 1 },
-            { "id": "p3", "title": "验证", "status": "in_progress", "stepIds": ["r3", "r4"], "done": 0, "total": 2 }
+            {
+              "id": "p1",
+              "title": "调研",
+              "status": "done",
+              "stepIds": [
+                "s1"
+              ],
+              "done": 1,
+              "total": 1
+            },
+            {
+              "id": "p2",
+              "title": "实现",
+              "status": "in_progress",
+              "stepIds": [
+                "s2",
+                "s3"
+              ],
+              "done": 0,
+              "total": 2
+            },
+            {
+              "id": "p3",
+              "title": "验证",
+              "status": "pending",
+              "stepIds": [
+                "s4"
+              ],
+              "done": 0,
+              "total": 1
+            }
           ],
           "steps": [
-            { "id": "r1", "phaseId": "p1", "title": "备份预检", "owner": "server-lead", "status": "done", "size": "S", "acceptance": "备份可用", "startedAt": "2026-11-02T16:32:20+08:00", "endedAt": "2026-11-02T16:34:00+08:00", "elapsedMs": 100000, "blockedBy": [], "note": "", "evidence": ["/srv/reports/backup-check.txt"], "jobId": null },
-            { "id": "r2", "phaseId": "p2", "title": "迁移 dry-run", "owner": "server-coder", "status": "in_progress", "size": "L", "acceptance": "无报错，统计行数一致", "startedAt": "2026-11-02T16:35:00+08:00", "endedAt": null, "elapsedMs": 262000, "blockedBy": [], "note": "", "evidence": [], "jobId": null },
-            { "id": "r3", "phaseId": "p3", "title": "审查校验脚本", "owner": "server-reviewer", "status": "in_progress", "size": "M", "acceptance": "覆盖空表/重复键", "startedAt": "2026-11-02T16:36:10+08:00", "endedAt": null, "elapsedMs": 192000, "blockedBy": [], "note": "", "evidence": [], "jobId": null },
-            { "id": "r4", "phaseId": "p3", "title": "正式执行", "owner": "server-lead", "status": "pending", "size": "L", "acceptance": "迁移完成且对账一致", "startedAt": null, "endedAt": null, "elapsedMs": null, "blockedBy": ["r2", "r3"], "note": "", "evidence": [], "jobId": null }
+            {
+              "id": "s1",
+              "phaseId": "p1",
+              "title": "读现有代码",
+              "owner": "lead",
+              "status": "done",
+              "size": "S",
+              "acceptance": "列出改动点",
+              "startedAt": "2026-11-02T17:45:40+08:00",
+              "endedAt": "2026-11-02T17:45:40+08:00",
+              "elapsedMs": 0,
+              "blockedBy": [],
+              "note": "改动点已整理",
+              "evidence": [
+                "notes.md"
+              ],
+              "jobId": null,
+              "progress": 100,
+              "progressNote": ""
+            },
+            {
+              "id": "s2",
+              "phaseId": "p2",
+              "title": "实现 --json",
+              "owner": "coder",
+              "status": "in_progress",
+              "size": "M",
+              "acceptance": "输出合法 JSON",
+              "startedAt": "2026-11-02T17:45:40+08:00",
+              "endedAt": null,
+              "elapsedMs": 1118,
+              "blockedBy": [],
+              "note": "",
+              "evidence": [],
+              "jobId": null,
+              "progress": 45,
+              "progressNote": "实现 JSON 序列化"
+            },
+            {
+              "id": "s3",
+              "phaseId": "p2",
+              "title": "补测试",
+              "owner": "tester",
+              "status": "pending",
+              "size": "M",
+              "acceptance": "用例全绿",
+              "startedAt": null,
+              "endedAt": null,
+              "elapsedMs": null,
+              "blockedBy": [
+                "s2"
+              ],
+              "note": "",
+              "evidence": [],
+              "jobId": null,
+              "progress": null,
+              "progressNote": ""
+            },
+            {
+              "id": "s4",
+              "phaseId": "p3",
+              "title": "跑全量测试",
+              "owner": "lead",
+              "status": "pending",
+              "size": "S",
+              "acceptance": "全绿",
+              "startedAt": null,
+              "endedAt": null,
+              "elapsedMs": null,
+              "blockedBy": [
+                "s3"
+              ],
+              "note": "",
+              "evidence": [],
+              "jobId": null,
+              "progress": null,
+              "progressNote": ""
+            }
           ],
           "events": [
-            { "uuid": "f7", "ts": "2026-11-02T16:39:22+08:00", "agent": "server-coder", "type": "heartbeat", "stepId": "r2", "current": "执行 dry-run 迁移", "note": "" },
-            { "uuid": "f6", "ts": "2026-11-02T16:39:01+08:00", "agent": "server-reviewer", "type": "heartbeat", "stepId": "r3", "current": "审查校验脚本", "note": "" },
-            { "uuid": "f5", "ts": "2026-11-02T16:36:10+08:00", "agent": "server-reviewer", "type": "start", "stepId": "r3", "note": "" },
-            { "uuid": "f4", "ts": "2026-11-02T16:35:00+08:00", "agent": "server-coder", "type": "start", "stepId": "r2", "note": "" },
-            { "uuid": "f3", "ts": "2026-11-02T16:34:00+08:00", "agent": "server-lead", "type": "done", "stepId": "r1", "note": "", "evidence": ["/srv/reports/backup-check.txt"] },
-            { "uuid": "f2", "ts": "2026-11-02T16:32:20+08:00", "agent": "server-lead", "type": "start", "stepId": "r1", "note": "" },
-            { "uuid": "f1", "ts": "2026-11-02T16:32:00+08:00", "agent": "server-lead", "type": "init", "stepId": null, "note": "计划 v1" }
+            {
+              "uuid": "baaa6cba7e7a4dc889398449c3e2046d",
+              "ts": "2026-11-02T17:45:40+08:00",
+              "agent": "lead",
+              "type": "done",
+              "stepId": "s1",
+              "note": "改动点已整理",
+              "evidence": [
+                "notes.md"
+              ]
+            },
+            {
+              "uuid": "bee281c6a1694e37b5eee5bf9b9b821d",
+              "ts": "2026-11-02T17:45:40+08:00",
+              "agent": "lead",
+              "type": "start",
+              "stepId": "s1",
+              "note": ""
+            },
+            {
+              "uuid": "415ef7862198491fb6e7e008b656bb96",
+              "ts": "2026-11-02T17:45:40+08:00",
+              "agent": "lead",
+              "type": "init",
+              "stepId": null,
+              "note": "计划 v1"
+            },
+            {
+              "uuid": "7427fbe3db3d4486884a7cec41238725",
+              "ts": "2026-11-02T17:45:40+08:00",
+              "agent": "coder",
+              "type": "report",
+              "stepId": "s2",
+              "note": "",
+              "current": "实现 JSON 序列化"
+            },
+            {
+              "uuid": "5726e3167e5d483585723d59fa9f0086",
+              "ts": "2026-11-02T17:45:40+08:00",
+              "agent": "coder",
+              "type": "start",
+              "stepId": "s2",
+              "note": ""
+            }
           ],
           "changes": [
-            { "rev": 1, "at": "2026-11-02T16:32:00+08:00", "by": "server-lead", "reason": "初版计划", "added": ["r1", "r2", "r3", "r4"], "removed": [], "changed": [] }
+            {
+              "rev": 1,
+              "at": "2026-11-02T17:45:40+08:00",
+              "by": "lead",
+              "reason": "初版计划",
+              "added": [
+                "s1",
+                "s2",
+                "s3",
+                "s4"
+              ],
+              "removed": [],
+              "changed": []
+            }
           ],
-          "urls": { "page": "/r/demo-remote/20261102-163200-c9d8", "boardMd": "~/.dsh/progress/inbox/demo-remote/runs/20261102-163200-c9d8/BOARD.md" }
+          "urls": {
+            "page": "/r/sample-session/20261102-174540-48db",
+            "boardMd": "/Users/quyue/My_Data/My_Projects/DeepSeek_Harness/live-progress/demo/demo_a/.dsh/progress/sessions/sample-session/tasks/20261102-174540-48db/BOARD.md"
+          },
+          "dir": "/Users/quyue/My_Data/My_Projects/DeepSeek_Harness/live-progress/demo/demo_a/.dsh/progress/sessions/sample-session/tasks/20261102-174540-48db"
         }
       ]
     }

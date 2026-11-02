@@ -48,6 +48,8 @@ PRESENCE_TTL = 30        # seconds a browser tab counts as open
 RUN_SUFFIX = uuid.uuid4().hex[:4]
 TERMINAL_STEPS = {"done", "failed", "skipped", "superseded"}
 OPEN_STEPS = {"pending", "in_progress", "blocked"}
+PROGRESS_LINE_RE = re.compile(r"^\s*(?:\[\[)?progress(?:\s*[:=]\s*|\s+)(\d{1,3})\s*%?\s*(?:\]\])?\s*$",
+                              re.IGNORECASE)
 STATUS_ZH = {
     "pending": "待开始", "in_progress": "进行中", "blocked": "阻塞",
     "done": "完成", "failed": "失败", "skipped": "跳过", "superseded": "已取消",
@@ -195,24 +197,53 @@ def resolve_root(args) -> Path:
     return (Path.cwd() / ".dsh" / "progress").resolve()
 
 
-def runs_path(root: Path) -> Path:
-    return Path(root) / "runs"
+def resolve_session_id(args) -> str:
+    raw = getattr(args, "session", None) or os.environ.get("DSH_SESSION_ID") or "default"
+    return slugify(raw, "session")
 
 
-def run_dirs(root: Path):
-    base = runs_path(root)
-    if not base.exists():
-        return []
-    found = [p for p in base.iterdir() if p.is_dir() and (p / "plan.json").exists()]
-    found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    return found
+def session_title(session_id: str):
+    """DSH auto-generated session title, read from the local session cache."""
+    dsh_home = Path(os.environ.get("DSH_HOME") or (Path.home() / ".dsh"))
+    path = dsh_home / "storages" / "session_projcache" / "sessions" / f"{session_id}.json"
+    data = read_json(path)
+    if not isinstance(data, dict):
+        return None
+    rows = (((data.get("record") or {}).get("rows")) or {})
+    title = rows.get("title") or {}
+    value = title.get("val") if isinstance(title, dict) else None
+    return str(value) if value else None
 
 
-def resolve_run(root: Path, run_id: str | None = None) -> Path | None:
+def resolve_project_root(args) -> Path:
+    """A project is a DSH session: <root>/sessions/<sessionId>."""
+    return resolve_root(args) / "sessions" / resolve_session_id(args)
+
+
+def tasks_path(base: Path) -> Path:
+    return Path(base) / "tasks"
+
+
+def run_dirs(base: Path):
+    """Task dirs under a session project (legacy `runs/` layout still readable)."""
+    for folder_name in ("tasks", "runs"):
+        folder = Path(base) / folder_name
+        if folder.exists():
+            found = [p for p in folder.iterdir() if p.is_dir() and (p / "plan.json").exists()]
+            if found:
+                found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                return found
+    return []
+
+
+def resolve_run(base: Path, run_id: str | None = None) -> Path | None:
     if run_id:
-        candidate = runs_path(root) / slugify(run_id, "run")
-        return candidate if (candidate / "plan.json").exists() else None
-    dirs = run_dirs(root)
+        for folder_name in ("tasks", "runs"):
+            candidate = Path(base) / folder_name / slugify(run_id, "task")
+            if (candidate / "plan.json").exists():
+                return candidate
+        return None
+    dirs = run_dirs(base)
     return dirs[0] if dirs else None
 
 
@@ -243,7 +274,8 @@ def _save_projects_locked(home: Path, data: dict) -> None:
 
 def register_project(home: Path, project_id: str, name: str | None = None,
                      color: str | None = None, kind: str = "local",
-                     path: str | None = None, token: str | None = None) -> dict:
+                     path: str | None = None, token: str | None = None,
+                     session_id: str | None = None) -> dict:
     project_id = slugify(project_id, "project")
     home = Path(home)
     with file_lock(home / ".projects.lock"):
@@ -263,6 +295,8 @@ def register_project(home: Path, project_id: str, name: str | None = None,
             source["path"] = str(Path(path).expanduser().resolve())
         if kind == "ingest":
             entry["token"] = token or entry.get("token") or uuid.uuid4().hex
+        if session_id:
+            entry["sessionId"] = session_id
         entry["source"] = source
         data["projects"][project_id] = entry
         _save_projects_locked(home, data)
@@ -378,6 +412,7 @@ def normalize_plan(raw: dict, run_id: str) -> dict:
 
     return {
         "title": title,
+        "name": str(plan.get("name") or ""),
         "goal": str(plan.get("goal") or ""),
         "runId": run_id,
         "revision": max(1, int(plan.get("revision") or 1)),
@@ -466,30 +501,58 @@ def _event_evidence(event: dict) -> list:
     return []
 
 
+def _coerce_percent(value):
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    return max(0, min(100, number))
+
+
 def _step_states(events: list) -> dict:
     states = {}
     for event in events:
         step_id = event.get("stepId")
-        event_type = event.get("type")
-        if not step_id or event_type not in TYPE_TO_STATUS:
+        if not step_id:
             continue
-        record = states.setdefault(step_id, {
-            "status": "pending", "startedAt": None, "endedAt": None,
-            "note": "", "evidence": [], "blockedReason": "",
-        })
-        record["status"] = TYPE_TO_STATUS[event_type]
-        if event_type in ("start", "resume"):
-            record["startedAt"] = event.get("ts")
-            record["endedAt"] = None
-        elif event_type in ("done", "fail", "skip", "block"):
-            record["endedAt"] = event.get("ts")
-        if event_type == "block":
-            record["blockedReason"] = str(event.get("note") or event.get("reason") or "")
-        if event.get("note"):
-            record["note"] = str(event.get("note"))
-        evidence = _event_evidence(event)
-        if evidence:
-            record["evidence"] = evidence
+        event_type = event.get("type")
+        if event_type in TYPE_TO_STATUS:
+            record = states.setdefault(step_id, {
+                "status": "pending", "startedAt": None, "endedAt": None,
+                "note": "", "evidence": [], "blockedReason": "",
+                "progress": None, "progressNote": "",
+            })
+            record["status"] = TYPE_TO_STATUS[event_type]
+            if event_type in ("start", "resume"):
+                record["startedAt"] = event.get("ts")
+                record["endedAt"] = None
+            elif event_type in ("done", "fail", "skip", "block"):
+                record["endedAt"] = event.get("ts")
+            if event_type == "block":
+                record["blockedReason"] = str(event.get("note") or event.get("reason") or "")
+            if event.get("note"):
+                record["note"] = str(event.get("note"))
+            evidence = _event_evidence(event)
+            if evidence:
+                record["evidence"] = evidence
+            if event_type == "done":
+                record["progress"] = 100
+        elif event_type in ("report", "heartbeat"):
+            record = states.setdefault(step_id, {
+                "status": "pending", "startedAt": None, "endedAt": None,
+                "note": "", "evidence": [], "blockedReason": "",
+                "progress": None, "progressNote": "",
+            })
+            percent = _coerce_percent(event.get("progress"))
+            if percent is not None:
+                record["progress"] = percent
+                record["progressNote"] = str(event.get("current") or event.get("note") or "")
+        # progress may ride on any event (heartbeat/report/done)
+        percent = _coerce_percent(event.get("progress"))
+        if percent is not None and step_id in states and event_type != "report":
+            states[step_id]["progress"] = percent
+            if event_type == "done":
+                states[step_id]["progress"] = 100
     return states
 
 
@@ -542,6 +605,8 @@ def build_run_view(run_dir: Path, now: datetime | None = None) -> dict | None:
             "note": record.get("note") or step.get("note") or "",
             "evidence": record.get("evidence") or [],
             "jobId": step.get("jobId"),
+            "progress": record.get("progress"),
+            "progressNote": record.get("progressNote") or "",
         }
         step_views.append(view)
         by_id[view["id"]] = view
@@ -642,10 +707,13 @@ def build_run_view(run_dir: Path, now: datetime | None = None) -> dict | None:
         if last_ts and ts_key(last_ts) > ts_key(updated_at):
             updated_at = last_ts
 
+    task_title = plan.get("name") or plan.get("title") or ""
     return {
-        "id": plan.get("runId") or run_dir.name,
-        "projectId": plan.get("projectId") or "",
-        "title": plan.get("title", ""),
+        "id": plan.get("taskId") or plan.get("runId") or run_dir.name,
+        "projectId": plan.get("projectId") or plan.get("sessionId") or "",
+        "sessionId": plan.get("sessionId") or plan.get("projectId") or "",
+        "title": task_title,
+        "taskTitle": plan.get("title", ""),
         "goal": plan.get("goal", ""),
         "status": plan.get("status", "running"),
         "revision": int(plan.get("revision") or 1),
@@ -681,6 +749,11 @@ def build_global_state(home: Path, now: datetime | None = None) -> dict:
     projects = []
     for project in list_projects(home):
         base = project_base(home, project)
+        project_name = project.get("name") or project["id"]
+        if project.get("kind") == "local" and project.get("sessionId"):
+            live_title = session_title(project["sessionId"])
+            if live_title:
+                project_name = live_title
         runs = []
         status = "ok"
         if not base.exists():
@@ -695,7 +768,7 @@ def build_global_state(home: Path, now: datetime | None = None) -> dict:
                             key=ts_key, default=None)
         projects.append({
             "id": project["id"],
-            "name": project.get("name") or project["id"],
+            "name": project_name,
             "color": project.get("color") or hash_color(project["id"]),
             "kind": project.get("kind", "local"),
             "sourceStatus": status,
@@ -1008,7 +1081,7 @@ class Hub:
     # -- ingest ------------------------------------------------------------
     def ingest(self, payload: dict):
         project_payload = payload.get("project") or {}
-        run_payload = payload.get("run") or {}
+        run_payload = payload.get("task") or payload.get("run") or {}
         project_id = slugify(project_payload.get("id") or "", "")
         if not project_id:
             return 400, {"ok": False, "error": "project.id is required"}
@@ -1027,7 +1100,7 @@ class Hub:
         run_id = slugify(run_payload.get("id") or "", "")
         if not run_id:
             return 400, {"ok": False, "error": "run.id is required"}
-        run_dir = self.home / "inbox" / project_id / "runs" / run_id
+        run_dir = self.home / "inbox" / project_id / "tasks" / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "events").mkdir(parents=True, exist_ok=True)
         with file_lock(self.home / ".ingest.lock"):
@@ -1040,8 +1113,13 @@ class Hub:
                 if existing_rev and incoming_rev < existing_rev:
                     pass  # ignore stale plan revision
                 else:
+                    started = parse_ts(run_payload.get("startedAt")) or now_dt()
                     normalized.update({
+                        "sessionId": project_id,
                         "projectId": project_id,
+                        "taskId": run_id,
+                        "name": normalized.get("name") or
+                                f"{started.strftime('%H:%M')} · {normalized['title']}",
                         "revision": max(incoming_rev, existing_rev if existing else 1),
                         "status": str(run_payload.get("status") or normalized.get("status") or "running"),
                         "createdAt": (existing or {}).get("createdAt") or normalized.get("createdAt") or iso(),
@@ -1301,7 +1379,8 @@ def _print_run_summary(view: dict, args) -> None:
     print(f"任务: {view['title']} [{STATUS_ZH.get(view['status'], view['status'])}] "
           f"计划 v{view['revision']}  进度 {progress['done']}/{progress['total']} "
           f"({progress['percent']}%)  并行 {progress['inProgress']}")
-    print(f"运行: {view['id']}  更新: {fmt_ago(ago_sec(view.get('updatedAt')))}")
+    print(f"项目: {view.get('sessionId') or view.get('projectId')}  任务id: {view['id']}  "
+          f"更新: {fmt_ago(ago_sec(view.get('updatedAt')))}")
     print("代理:")
     for agent in view["agents"]:
         current = agent.get("currentText") or "—"
@@ -1311,54 +1390,64 @@ def _print_run_summary(view: dict, args) -> None:
     for step in view["steps"]:
         print(f"  {step['id']:<8} {STATUS_ZH.get(step['status'], step['status']):<6} "
               f"{step['owner']:<10} {step['title']}  "
-              f"({fmt_duration(step.get('elapsedMs'))})")
+              f"({fmt_duration(step.get('elapsedMs'))})"
+              + (f"  {step['progress']}%" if step.get("progress") is not None else ""))
 
 
 def cmd_init(args) -> int:
     root = resolve_root(args)
     home = resolve_home(args)
-    project_id = slugify(args.project_id, "project")
-    run_id = slugify(args.run or f"{now_dt().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}", "run")
-    run_dir = runs_path(root) / run_id
-    (run_dir / "events").mkdir(parents=True, exist_ok=True)
+    session_id = resolve_session_id(args)
+    project_dir = root / "sessions" / session_id
+    task_id = slugify(args.run or f"{now_dt().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}", "task")
+    task_dir = tasks_path(project_dir) / task_id
+    (task_dir / "events").mkdir(parents=True, exist_ok=True)
     raw = _load_plan_file(args.plan_file)
-    plan = normalize_plan(raw, run_id)
+    plan = normalize_plan(raw, task_id)
+    started = now_dt()
+    task_name = args.name or f"{started.strftime('%H:%M')} · {plan['title']}"
     plan.update({
-        "projectId": project_id,
+        "sessionId": session_id,
+        "projectId": session_id,
+        "taskId": task_id,
+        "name": task_name,
         "revision": 1,
         "status": "running",
-        "createdAt": iso(),
-        "updatedAt": iso(),
+        "createdAt": iso(started),
+        "updatedAt": iso(started),
         "completedAt": None,
         "changes": [{
-            "rev": 1, "at": iso(), "by": "lead",
+            "rev": 1, "at": iso(started), "by": "lead",
             "reason": str(raw.get("reason") or "初版计划"),
             "added": [step["id"] for step in plan["steps"]],
             "removed": [], "changed": [],
         }],
     })
-    write_json(run_dir / "plan.json", plan)
-    append_event(run_dir, {"agent": "lead", "type": "init", "note": "计划 v1"})
+    write_json(task_dir / "plan.json", plan)
+    append_event(task_dir, {"agent": "lead", "type": "init", "note": "计划 v1"})
+    project_name = args.session_title or session_title(session_id) or f"会话 {session_id[-8:].strip('-') or session_id}"
     if not args.no_register:
-        register_project(home, project_id, name=args.name or project_id,
-                         color=args.color, kind="local", path=root)
-    view = render_run(run_dir)
+        register_project(home, session_id, name=project_name, color=args.color,
+                         kind="local", path=project_dir, session_id=session_id)
+    view = render_run(task_dir)
     if args.json_out:
-        print(json.dumps({"runId": run_id, "projectId": project_id, "dir": str(run_dir),
-                          "view": view}, ensure_ascii=False, indent=2))
+        print(json.dumps({"taskId": task_id, "projectId": session_id,
+                          "name": task_name, "dir": str(task_dir), "view": view},
+                         ensure_ascii=False, indent=2))
     else:
-        print(f"run: {run_id}")
-        print(f"dir: {run_dir}")
-        print(f"project: {project_id}")
-        print(f"看板: http://127.0.0.1:{DEFAULT_PORT}/r/{project_id}/{run_id}")
+        print(f"task: {task_id}")
+        print(f"name: {task_name}")
+        print(f"dir: {task_dir}")
+        print(f"project: {session_id} ({project_name})")
+        print(f"看板: http://127.0.0.1:{DEFAULT_PORT}/r/{session_id}/{task_id}")
     return 0
 
 
 def _require_run(args) -> Path:
-    root = resolve_root(args)
+    root = resolve_project_root(args)
     run_dir = resolve_run(root, getattr(args, "run", None))
     if not run_dir:
-        raise SystemExit(f"no run found under {root} (run init first)")
+        raise SystemExit(f"no task found under {root} (run init first)")
     return run_dir
 
 
@@ -1443,13 +1532,37 @@ def cmd_resume(args) -> int:
 
 def cmd_heartbeat(args) -> int:
     run_dir = _require_run(args)
-    append_event(run_dir, {
+    event = {
         "agent": slugify(args.agent, "agent"), "type": "heartbeat",
         "stepId": slugify(args.step, "s") if args.step else None,
         "current": args.current or "",
-    })
+    }
+    percent = _coerce_percent(getattr(args, "percent", None))
+    if percent is not None:
+        event["progress"] = percent
+    append_event(run_dir, event)
     maybe_render(run_dir, args)
     print("heartbeat")
+    return 0
+
+
+def cmd_report(args) -> int:
+    """Report per-step progress (0-100) without changing the step state machine."""
+    run_dir = _require_run(args)
+    plan = load_plan(run_dir) or {}
+    step = _find_step(plan, slugify(args.step, "s"))
+    agent = slugify(args.agent or step["owner"], "agent")
+    percent = _coerce_percent(args.percent)
+    if percent is None:
+        raise SystemExit("report: --percent must be an integer 0-100")
+    append_event(run_dir, {
+        "agent": agent, "type": "report", "stepId": step["id"],
+        "progress": percent,
+        "current": args.current or "",
+        "note": args.note or "",
+    })
+    maybe_render(run_dir, args)
+    print(f"report {step['id']} {percent}%")
     return 0
 
 
@@ -1516,6 +1629,16 @@ def cmd_exec(args) -> int:
 
     env = dict(os.environ)
     env.setdefault("PYTHONUNBUFFERED", "1")
+    env.update({
+        "LIVE_PROGRESS_BOARD": str(Path(__file__).resolve()),
+        "LIVE_PROGRESS_PYTHON": sys.executable,
+        "LIVE_PROGRESS_HOME": str(resolve_home(args)),
+        "LIVE_PROGRESS_ROOT": str(resolve_root(args)),
+        "LIVE_PROGRESS_SESSION": resolve_session_id(args),
+        "LIVE_PROGRESS_TASK": run_dir.name,
+        "LIVE_PROGRESS_STEP": step["id"],
+        "LIVE_PROGRESS_AGENT": agent,
+    })
     try:
         proc = subprocess.Popen(
             command, cwd=args.cwd or None, env=env, stdin=subprocess.DEVNULL,
@@ -1539,6 +1662,14 @@ def cmd_exec(args) -> int:
                     log.write(line)
                     log.flush()
                     tail["last"] = line.rstrip()[:140]
+                    progress_match = PROGRESS_LINE_RE.match(line)
+                    if progress_match:
+                        percent = _coerce_percent(progress_match.group(1))
+                        if percent is not None:
+                            append_event(run_dir, {
+                                "agent": agent, "type": "report", "stepId": step["id"],
+                                "progress": percent, "current": line.strip(),
+                            })
                     if not args.quiet:
                         sys.stdout.write(line)
                         sys.stdout.flush()
@@ -1687,8 +1818,12 @@ def cmd_revise(args) -> int:
         "changed": sorted(set(changed)),
     })
     new.update({
-        "projectId": old.get("projectId"),
+        "sessionId": old.get("sessionId") or old.get("projectId"),
+        "projectId": old.get("projectId") or old.get("sessionId"),
+        "taskId": old.get("taskId") or run_dir.name,
         "runId": old.get("runId") or run_dir.name,
+        "name": old.get("name") or
+                f"{(parse_ts(old.get('createdAt')) or now_dt()).strftime('%H:%M')} · {new['title']}",
         "revision": revision,
         "status": old.get("status", "running"),
         "createdAt": old.get("createdAt"),
@@ -1728,7 +1863,7 @@ def cmd_close(args) -> int:
 
 
 def cmd_status(args) -> int:
-    root = resolve_root(args)
+    root = resolve_project_root(args)
     if args.all:
         run_dirs_list = run_dirs(root)
         if not run_dirs_list:
@@ -1757,7 +1892,7 @@ def cmd_status(args) -> int:
 
 
 def cmd_render(args) -> int:
-    root = resolve_root(args)
+    root = resolve_project_root(args)
     targets = run_dirs(root) if args.all else [resolve_run(root, args.run)]
     for run_dir in [target for target in targets if target]:
         view = render_run(run_dir)
@@ -1800,7 +1935,7 @@ def cmd_prune(args) -> int:
     ``running`` are never deleted. Deletion only happens with ``--yes`` and
     never under ``--dry-run``.
     """
-    root = resolve_root(args)
+    root = resolve_project_root(args)
     dry_run = bool(getattr(args, "dry_run", False))
     confirmed = bool(getattr(args, "yes", False))
     dirs = run_dirs(root)
@@ -1836,6 +1971,44 @@ def cmd_prune(args) -> int:
     return 0
 
 
+def cmd_migrate(args) -> int:
+    """Adopt legacy <root>/runs/* into <root>/sessions/<session>/tasks/*."""
+    home = resolve_home(args)
+    root = resolve_root(args)
+    session_id = resolve_session_id(args)
+    project_dir = root / "sessions" / session_id
+    task_root = tasks_path(project_dir)
+    task_root.mkdir(parents=True, exist_ok=True)
+    moved = []
+    legacy = root / "runs"
+    if legacy.exists():
+        for old_dir in sorted(legacy.iterdir()):
+            if not old_dir.is_dir() or not (old_dir / "plan.json").exists():
+                continue
+            dest = task_root / old_dir.name
+            if dest.exists():
+                continue
+            shutil.move(str(old_dir), str(dest))
+            plan = load_plan(dest) or {}
+            plan["sessionId"] = session_id
+            plan["projectId"] = session_id
+            plan["taskId"] = str(plan.get("taskId") or plan.get("runId") or old_dir.name)
+            if not plan.get("name"):
+                created = parse_ts(plan.get("createdAt")) or now_dt()
+                plan["name"] = f"{created.strftime('%H:%M')} · {plan.get('title') or '任务'}"
+            plan["updatedAt"] = iso()
+            write_json(dest / "plan.json", plan)
+            render_run(dest)
+            moved.append(dest.name)
+    title = args.session_title or session_title(session_id) or f"会话 {session_id[-8:]}"
+    register_project(home, session_id, name=title, color=args.color,
+                     kind="local", path=project_dir, session_id=session_id)
+    print(f"migrated {len(moved)} task(s) into {project_dir}")
+    for name in moved:
+        print(f"  {name}")
+    return 0
+
+
 def cmd_project(args) -> int:
     home = resolve_home(args)
     if args.project_cmd == "list":
@@ -1868,7 +2041,7 @@ def cmd_project(args) -> int:
 
 def cmd_push(args) -> int:
     home = resolve_home(args)
-    root = resolve_root(args)
+    root = resolve_project_root(args)
     run_dir = resolve_run(root, args.run)
     if not run_dir:
         print(f"no run under {root}", file=sys.stderr)
@@ -1931,18 +2104,19 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--home", default=argparse.SUPPRESS, help="hub home (default ~/.dsh/progress)")
     common.add_argument("--root", default=argparse.SUPPRESS, help="project progress dir (default ./.dsh/progress)")
+    common.add_argument("--session", default=argparse.SUPPRESS, help="session id (default $DSH_SESSION_ID)")
     common.add_argument("--json", dest="json_out", action="store_true", default=argparse.SUPPRESS)
     common.add_argument("--no-render", action="store_true", default=argparse.SUPPRESS)
 
     parser = argparse.ArgumentParser(prog="board.py", description="live-progress board CLI",
                                      parents=[common])
-    parser.set_defaults(home=None, root=None, json_out=False, no_render=False)
+    parser.set_defaults(home=None, root=None, session=None, json_out=False, no_render=False)
     parser.add_argument("--version", action="version", version=f"live-progress {VERSION}")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("init", parents=[common], help="create a run from a plan file")
-    p.add_argument("--project-id", required=True)
-    p.add_argument("--name")
+    p = sub.add_parser("init", parents=[common], help="create a task in the current session")
+    p.add_argument("--name", help="task name (default: HH:MM · plan title)")
+    p.add_argument("--session-title", help="override the project (session) title")
     p.add_argument("--color")
     p.add_argument("--plan-file", required=True)
     p.add_argument("--run")
@@ -1980,8 +2154,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--agent", required=True)
     p.add_argument("--step")
     p.add_argument("--current")
+    p.add_argument("--percent", type=int)
     p.add_argument("--run")
     p.set_defaults(func=cmd_heartbeat)
+
+    p = sub.add_parser("report", parents=[common], help="report step progress 0-100")
+    p.add_argument("step")
+    p.add_argument("--percent", type=int, required=True)
+    p.add_argument("--agent")
+    p.add_argument("--current")
+    p.add_argument("--note")
+    p.add_argument("--run")
+    p.set_defaults(func=cmd_report)
 
     p = sub.add_parser("exec", parents=[common], help="run a command while recording a step")
     p.add_argument("step")
@@ -2057,9 +2241,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_add.add_argument("--kind", choices=["local", "ingest"], default="ingest")
     p_list = p_sub.add_parser("list", parents=[common])
     p_remove = p_sub.add_parser("remove", parents=[common])
-    p_remove.add_argument("id")
+    p_remove.add_argument("--id", required=True)
     p_remove.add_argument("--purge", action="store_true")
     p.set_defaults(func=cmd_project)
+
+    p = sub.add_parser("migrate", parents=[common],
+                       help="adopt legacy <root>/runs into the current session")
+    p.add_argument("--session-title")
+    p.add_argument("--color")
+    p.set_defaults(func=cmd_migrate)
 
     p = sub.add_parser("push", parents=[common], help="push a local run to a hub")
     p.add_argument("--to", required=True)
@@ -2071,7 +2261,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-GLOBAL_VALUE_OPTS = {"--home", "--root"}
+GLOBAL_VALUE_OPTS = {"--home", "--root", "--session"}
 GLOBAL_FLAG_OPTS = {"--json", "--no-render"}
 
 

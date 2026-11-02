@@ -7,6 +7,12 @@ BOARD="python3 .dsh/skills/live-progress/scripts/board.py"
 # 若 skill 装在别处，换成实际路径；本文件所在目录的上一级就是 skill 根。
 ```
 
+## 0. 上下文（自动带入）
+
+- 项目 = 当前 DSH session（`$DSH_SESSION_ID`），不用你指定 project id。
+- 任务 = 当前这次请求；任务名自动是 `HH:MM · 计划标题`。
+- 你的步骤 id 由 Lead 分配；失败重试会开新任务。
+
 ## 1. 开始 / 完成 / 失败
 
 ```bash
@@ -46,7 +52,18 @@ $BOARD exec s5 --agent bg-1 --heartbeat 30 --timeout 1800 -- pytest -q
 $BOARD heartbeat --agent coder --step s3 --current "正在写 test_json 用例"
 ```
 
-## 4. spawn 模板（Lead 复制给子 agent）
+## 4. 步骤进度
+
+```bash
+$BOARD report s3 --percent 45 --agent coder --current "读取数据 45%"
+```
+
+- `--percent` 0–100，只更新进度，不改状态；done 时自动 100%。
+- 用 `exec` 时子进程会拿到 `LIVE_PROGRESS_*` 环境变量，可以直接调用：
+  `$LIVE_PROGRESS_PYTHON $LIVE_PROGRESS_BOARD report ...`。
+- `exec` 也会把子进程输出中 `progress: 40` 这样的行自动转成进度。
+
+## 5. spawn 模板（Lead 复制给子 agent）
 
 ```
 本任务使用 live-progress 记账。你的步骤是 <stepId>（owner=<agentName>）。
@@ -58,7 +75,7 @@ $BOARD heartbeat --agent coder --step s3 --current "正在写 test_json 用例"
 只写你自己的事件，不修改 plan.json；计划要变就发消息给 Lead。
 ```
 
-## 5. 三条红线
+## 6. 三条红线
 
 1. 不伪造进度：心跳只反映真实动作。
 2. 不碰别人的 step，不改计划；计划变更找 Lead。

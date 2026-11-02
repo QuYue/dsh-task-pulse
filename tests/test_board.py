@@ -46,6 +46,7 @@ class BoardTestCase(unittest.TestCase):
         self.home = self.base / "hub"
         self.root = self.base / "proj"
         self.plan_path = self.base / "plan.json"
+        self.session = "test-session"
         self.plan_path.write_text(json.dumps(BASE_PLAN), encoding="utf-8")
         self.server = None
         self.port = None
@@ -62,23 +63,30 @@ class BoardTestCase(unittest.TestCase):
     # -- helpers ---------------------------------------------------------
     def cli(self, *args, check=True):
         result = subprocess.run(
-            [PY, str(BOARD), "--home", str(self.home), "--root", str(self.root), *args],
+            [PY, str(BOARD), "--home", str(self.home), "--root", str(self.root),
+             "--session", self.session, *args],
             capture_output=True, text=True,
         )
         if check and result.returncode != 0:
             self.fail(f"board.py {' '.join(args)} failed: {result.stderr}")
         return result
 
-    def init(self, project="demo", plan_path=None):
-        result = self.cli("init", "--project-id", project,
-                          "--plan-file", str(plan_path or self.plan_path))
+    def init(self, plan_path=None):
+        result = self.cli("init", "--plan-file", str(plan_path or self.plan_path))
         return result.stdout
 
     def status(self):
         return json.loads(self.cli("--json", "status").stdout)
 
+    def session_root(self):
+        return self.root / "sessions" / self.session
+
+    def task_ids(self):
+        base = self.session_root() / "tasks"
+        return sorted(path.name for path in base.iterdir()) if base.exists() else []
+
     def run_dir(self):
-        dirs = list((self.root / "runs").glob("*/plan.json"))
+        dirs = list((self.session_root() / "tasks").glob("*/plan.json"))
         self.assertEqual(len(dirs), 1)
         return dirs[0].parent
 
@@ -128,21 +136,20 @@ class BoardTestCase(unittest.TestCase):
     def init_runs(self, *run_ids):
         """Create one run per id; later ids get newer directory mtimes."""
         for run_id in run_ids:
-            self.cli("init", "--project-id", "demo", "--run", run_id,
-                     "--plan-file", str(self.plan_path))
+            self.cli("init", "--run", run_id, "--plan-file", str(self.plan_path))
         base = 1_700_000_000
         for index, run_id in enumerate(run_ids, start=1):
             stamp = base + index
-            os.utime(self.root / "runs" / run_id, (stamp, stamp))
+            os.utime(self.session_root() / "tasks" / run_id, (stamp, stamp))
 
     def set_plan_status(self, run_id, status):
-        path = self.root / "runs" / run_id / "plan.json"
+        path = self.session_root() / "tasks" / run_id / "plan.json"
         plan = json.loads(path.read_text(encoding="utf-8"))
         plan["status"] = status
         path.write_text(json.dumps(plan), encoding="utf-8")
 
     def run_ids_on_disk(self):
-        return sorted(path.name for path in (self.root / "runs").iterdir())
+        return self.task_ids()
 
     # -- tests -----------------------------------------------------------
     def test_init_registers_project_and_writes_artifacts(self):
@@ -151,10 +158,11 @@ class BoardTestCase(unittest.TestCase):
         self.assertTrue((run_dir / "state.json").exists())
         self.assertTrue((run_dir / "BOARD.md").exists())
         projects = json.loads((self.home / "projects.json").read_text())["projects"]
-        self.assertIn("demo", projects)
-        self.assertEqual(projects["demo"]["kind"], "local")
+        self.assertIn(self.session, projects)
+        self.assertEqual(projects[self.session]["kind"], "local")
+        self.assertEqual(projects[self.session]["sessionId"], self.session)
         view = self.status()
-        self.assertEqual(view["title"], "测试任务")
+        self.assertTrue(view["title"].endswith("测试任务"))
         self.assertEqual(view["revision"], 1)
         self.assertEqual(len(view["steps"]), 4)
         self.assertEqual(view["progress"]["percent"], 0)
@@ -267,19 +275,19 @@ class BoardTestCase(unittest.TestCase):
         self.assertEqual(caught.exception.code, 403)
 
     def test_push_sends_local_run_to_hub(self):
-        self.init(project="pushme")
+        self.init()
         run_dir = self.run_dir()
         self.start_server()
-        self.cli("project", "add", "--id", "pushme", "--name", "推送",
+        self.cli("project", "add", "--id", self.session, "--name", "推送",
                  "--kind", "ingest", "--json")
         result = self.cli("push", "--to", f"http://127.0.0.1:{self.port}",
-                          "--project-id", "pushme", check=False)
+                          "--project-id", self.session, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         pushed = json.loads(result.stdout)
         self.assertGreaterEqual(pushed.get("accepted", 0), 1)
         state = self.wait_state(
-            lambda data: any(p["id"] == "pushme" and p["runs"] for p in data["projects"]))
-        project = next(p for p in state["projects"] if p["id"] == "pushme")
+            lambda data: any(p["id"] == self.session and p["runs"] for p in data["projects"]))
+        project = next(p for p in state["projects"] if p["id"] == self.session)
         self.assertTrue(project["runs"][0]["steps"])
 
 
@@ -329,6 +337,48 @@ class BoardTestCase(unittest.TestCase):
         self.assertEqual(step["status"], "failed")
         self.assertIn("timeout", step["note"])
 
+    def test_migrate_adopts_legacy_runs(self):
+        legacy = self.root / "runs" / "old-task"
+        (legacy / "events").mkdir(parents=True)
+        plan = dict(BASE_PLAN)
+        plan["title"] = "旧任务"
+        plan["createdAt"] = "2026-11-02T09:30:00+08:00"
+        legacy.joinpath("plan.json").write_text(json.dumps(plan), encoding="utf-8")
+        self.cli("migrate", "--session-title", "迁移会话")
+        migrated = self.session_root() / "tasks" / "old-task" / "plan.json"
+        self.assertTrue(migrated.exists())
+        data = json.loads(migrated.read_text())
+        self.assertEqual(data["sessionId"], self.session)
+        self.assertTrue(data["name"].startswith("09:30 · "))
+
+    def test_init_creates_session_task_with_time_name(self):
+        self.init()
+        view = self.status()
+        self.assertEqual(view["sessionId"], self.session)
+        self.assertIn(" · ", view["title"])
+        self.assertTrue((self.session_root() / "tasks").exists())
+
+    def test_report_and_heartbeat_progress(self):
+        self.init()
+        self.cli("start", "s2", "--agent", "coder")
+        self.cli("report", "s2", "--percent", "40", "--agent", "coder",
+                 "--current", "读取数据")
+        self.cli("heartbeat", "--agent", "coder", "--step", "s2",
+                 "--percent", "65", "--current", "处理中")
+        step = next(item for item in self.status()["steps"] if item["id"] == "s2")
+        self.assertEqual(step["progress"], 65)
+        self.assertEqual(step["status"], "in_progress")
+
+    def test_exec_exposes_progress_env(self):
+        self.init()
+        log = self.base / "exec-env.log"
+        self.cli("exec", "s2", "--agent", "coder", "--quiet", "--log", str(log), "--",
+                 PY, "-c", "import os; print('STEP=' + os.environ['LIVE_PROGRESS_STEP']); "
+                          "print('SESSION=' + os.environ['LIVE_PROGRESS_SESSION'])")
+        text = log.read_text()
+        self.assertIn("STEP=s2", text)
+        self.assertIn("SESSION=" + self.session, text)
+
     def test_exec_keeps_wrapped_command_flags(self):
         self.init()
         log = self.base / "exec-args.log"
@@ -362,7 +412,7 @@ class BoardTestCase(unittest.TestCase):
         self.assertEqual(summary["kept"], ["r3"])
         self.assertEqual(sorted(summary["deleted"]), ["r1", "r2"])
         self.assertEqual(self.run_ids_on_disk(), ["r3"])
-        self.assertTrue((self.root / "runs" / "r3" / "plan.json").exists())
+        self.assertTrue((self.session_root() / "tasks" / "r3" / "plan.json").exists())
 
     def test_prune_skips_running_run(self):
         self.init_runs("r1", "r2", "r3")
@@ -374,7 +424,7 @@ class BoardTestCase(unittest.TestCase):
         self.assertEqual(summary["deleted"], ["r2"])
         self.assertEqual(summary["skipped"], ["r1"])
         self.assertEqual(self.run_ids_on_disk(), ["r1", "r3"])
-        self.assertTrue((self.root / "runs" / "r1" / "plan.json").exists())
+        self.assertTrue((self.session_root() / "tasks" / "r1" / "plan.json").exists())
 
     def test_prune_rejects_keep_zero(self):
         self.init_runs("r1")

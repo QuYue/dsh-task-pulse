@@ -278,9 +278,15 @@
   .steps th:nth-child(1) { width: 96px; }
   .steps th:nth-child(2) { width: 62px; }
   .steps th:nth-child(4) { width: 108px; }
-  .steps th:nth-child(5) { width: 74px; }
-  .steps th:nth-child(6) { width: 96px; }
-  .steps th:nth-child(7) { width: 178px; }
+  .steps th:nth-child(5) { width: 112px; }
+  .steps th:nth-child(6) { width: 74px; }
+  .steps th:nth-child(7) { width: 96px; }
+  .steps th:nth-child(8) { width: 178px; }
+  .step-progress { display: flex; flex-direction: column; gap: 3px; min-width: 92px; }
+  .step-progress-meta { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .step-progress-num { color: #cfd9e6; font-weight: 600; }
+  .step-progress-track { height: 5px; border-radius: 999px; background: rgba(255, 255, 255, .07); overflow: hidden; }
+  .step-progress-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .35s ease; }
   .steps td { padding: 7px 8px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
   .steps tbody:last-child tr:last-child td { border-bottom: 0; }
   .steps tr:not(.phase-row) td:first-child { border-left: 3px solid transparent; }
@@ -878,10 +884,30 @@
     el.textContent = ms != null ? fmtDur(ms) : '—';
     return el;
   }
+  function stepProgressCell(step) {
+    var pct = num(step.progress);
+    if (pct == null && str(step.status) === 'done') pct = 100;
+    var box = mk('div', 'step-progress');
+    if (pct == null) {
+      box.appendChild(span('dim', '—'));
+      return box;
+    }
+    pct = clamp(pct, 0, 100);
+    var meta = mk('div', 'step-progress-meta');
+    meta.appendChild(span('step-progress-num', Math.round(pct) + '%'));
+    if (str(step.progressNote)) meta.title = str(step.progressNote);
+    var track = mk('div', 'step-progress-track');
+    var fill = mk('div', 'step-progress-fill');
+    fill.style.width = pct + '%';
+    track.appendChild(fill);
+    box.appendChild(meta);
+    box.appendChild(track);
+    return box;
+  }
   function phaseRow(phase, steps) {
     var tr = mk('tr', 'phase-row');
     var td = mk('td');
-    td.colSpan = 7;
+    td.colSpan = 8;
     var box = mk('div', 'phase-head');
     var status = str(phase && phase.status);
     box.appendChild(mk('span', 'dot ph-' + (STEP_STATUS[status] ? status : 'pending')));
@@ -926,8 +952,14 @@
     tr.appendChild(tdTitle);
 
     var tdOwner = mk('td', 'cell-owner');
-    tdOwner.appendChild(ownerCell(step.owner, agents));
+    var executed = status !== 'pending' && status !== 'skipped' && status !== 'superseded';
+    if (executed) tdOwner.appendChild(ownerCell(step.owner, agents));
+    else tdOwner.appendChild(span('dim', '—'));
     tr.appendChild(tdOwner);
+
+    var tdProgress = mk('td', 'cell-progress');
+    tdProgress.appendChild(stepProgressCell(step));
+    tr.appendChild(tdProgress);
 
     var tdElapsed = mk('td', 'cell-elapsed');
     tdElapsed.appendChild(elapsedCell(step));
@@ -1053,17 +1085,21 @@
     });
     return rows;
   }
-  function taskTable(rows) {
+  function taskTable(rows, showProject) {
     var wrap = mk('div', 'tasks-wrap');
     var table = mk('table', 'tasks');
     var thead = mk('thead');
     var headRow = mk('tr');
-    var labels = ['状态', '项目', '任务', '进度', '当前', '计划', '最后更新'];
+    var labels = showProject === false
+      ? ['状态', '任务', '进度', '当前', '计划', '最后更新']
+      : ['状态', '项目', '任务', '进度', '当前', '计划', '最后更新'];
     for (var h = 0; h < labels.length; h++) headRow.appendChild(mk('th', '', labels[h]));
     thead.appendChild(headRow);
     table.appendChild(thead);
     var tbody = mk('tbody');
-    for (var i = 0; i < rows.length; i++) tbody.appendChild(taskRow(rows[i].project, rows[i].run));
+    for (var i = 0; i < rows.length; i++) {
+      tbody.appendChild(taskRow(rows[i].project, rows[i].run, showProject));
+    }
     table.appendChild(tbody);
     wrap.appendChild(table);
     return wrap;
@@ -1138,11 +1174,11 @@
     head.appendChild(span('task-list-count', rows.length + ' 个任务 · 点击行查看步骤'));
     card.appendChild(head);
     if (!rows.length) card.appendChild(emptyBox('该项目还没有任务记录。'));
-    else card.appendChild(taskTable(rows));
+    else card.appendChild(taskTable(rows, false));
     page.appendChild(card);
     return page;
   }
-  function taskRow(project, run) {
+  function taskRow(project, run, showProject) {
     var url = runPageUrl(project, run);
     var tr = mk('tr', 'task-row');
     tr.tabIndex = 0;
@@ -1151,15 +1187,17 @@
     statusCell.appendChild(statusPill(RUN_STATUS, run.status));
     tr.appendChild(statusCell);
 
-    var projectCell = mk('td');
-    var pwrap = mk('div', 'task-project');
-    var dot = mk('span', 'task-project-dot');
-    var dotColor = safeColor(project && project.color, '');
-    if (dotColor) dot.style.background = dotColor;
-    pwrap.appendChild(dot);
-    pwrap.appendChild(span('task-project-name', str(project && project.name) || str(project && project.id)));
-    projectCell.appendChild(pwrap);
-    tr.appendChild(projectCell);
+    if (showProject !== false) {
+      var projectCell = mk('td');
+      var pwrap = mk('div', 'task-project');
+      var dot = mk('span', 'task-project-dot');
+      var dotColor = safeColor(project && project.color, '');
+      if (dotColor) dot.style.background = dotColor;
+      pwrap.appendChild(dot);
+      pwrap.appendChild(span('task-project-name', str(project && project.name) || str(project && project.id)));
+      projectCell.appendChild(pwrap);
+      tr.appendChild(projectCell);
+    }
 
     var titleCell = mk('td');
     var titleLine = mk('div', 'task-title-line');
@@ -1216,8 +1254,6 @@
       page.appendChild(emptyBox('还没有项目。用 board.py init 注册项目后，项目卡片会自动出现在这里。'));
       return page;
     }
-    var list = taskListView(projects);
-    if (list) page.appendChild(list);
     var cardsHead = mk('div', 'section-head');
     cardsHead.appendChild(mk('h2', 'section-title', '项目'));
     cardsHead.appendChild(span('section-hint', '按项目聚合的当前状态'));
@@ -1244,9 +1280,9 @@
         if (st === 'running' || st === 'in_progress') running++;
       }
     }
-    sub.appendChild(span('', '共 ' + projects.length + ' 个项目'));
+    sub.appendChild(span('', '共 ' + projects.length + ' 个会话'));
     sub.appendChild(sep());
-    sub.appendChild(span('', totalRuns + ' 次运行 · ' + running + ' 个进行中'));
+    sub.appendChild(span('', totalRuns + ' 个任务 · ' + running + ' 个进行中'));
     sub.appendChild(sep());
     sub.appendChild(span('', '更新于 '));
     sub.appendChild(snapshotAgeEl());
@@ -1319,7 +1355,7 @@
     last.appendChild(agoEl(str(project.lastActivityAt) || str(run && run.updatedAt), null));
     foot.appendChild(last);
     if (arr(project.runs).length > 1) {
-      foot.appendChild(mk('span', 'chip', '共 ' + arr(project.runs).length + ' 次运行'));
+      foot.appendChild(mk('span', 'chip', '共 ' + arr(project.runs).length + ' 个任务'));
     }
     foot.appendChild(span('pc-go', '查看 →'));
     card.appendChild(foot);
@@ -1525,7 +1561,7 @@
   function stepsCard(run) {
     var card = mk('section', 'card');
     var steps = arr(run.steps);
-    card.appendChild(cardHead('步骤', steps.length ? steps.length + ' 个步骤' : ''));
+    card.appendChild(cardHead('任务进度表', steps.length ? steps.length + ' 个步骤' : ''));
     if (!steps.length) {
       card.appendChild(emptyBox('暂无步骤数据'));
       return card;
@@ -1534,7 +1570,7 @@
     var table = mk('table', 'steps');
     var thead = mk('thead');
     var htr = mk('tr');
-    var cols = ['状态', 'ID', '步骤', '负责人', '耗时', '依赖阻塞', '证据'];
+    var cols = ['状态', 'ID', '步骤', '执行者', '进度', '耗时', '依赖阻塞', '证据'];
     for (var i = 0; i < cols.length; i++) {
       var th = mk('th');
       th.scope = 'col';

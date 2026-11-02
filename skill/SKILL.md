@@ -8,6 +8,9 @@ whenToUse: 任务预计超过约 10 分钟，或会派生子 agent、后台任�
 
 ## 心智模型
 
+- **项目 = 一个 DSH Session**：`$DSH_SESSION_ID`，名称取 DSH 自动生成的会话标题。
+- **任务 = 用户的一次请求**：一次 `init` 一个任务，名称自动为 `HH:MM · 计划标题`；失败重试 = 新任务。
+- **步骤 = 任务拆分**：可并行，可带独立进度（0–100）。
 - **计划**（`plan.json`）：主 agent 写，带 `revision`。回答“要做哪些事、谁负责、依赖谁”。
 - **事件**（`events/<agent>.jsonl`）：每个 agent 只追加自己的文件。回答“现在做到哪了”。
 - **看板**（`state.json` 快照 + 网页）：由前两者推导，只读。回答“用户此刻看到什么”。
@@ -35,7 +38,7 @@ BOARD="python3 .dsh/skills/live-progress/scripts/board.py"
 
 数据位置：
 
-- 项目运行数据：`<cwd>/.dsh/progress/`（可用 `--root` 改）
+- 数据目录：`<cwd>/.dsh/progress/sessions/<sessionId>/tasks/<taskId>/`（可用 `--root` 改）
 - 本地 hub：`~/.dsh/progress`；沙箱内不可写时自动回退到 `<cwd>/.dsh/progress/hub`。
   多命令务必显式传同一个 `--home`，或设置环境变量 `DSH_PROGRESS_HOME`。
 
@@ -60,13 +63,14 @@ BOARD="python3 .dsh/skills/live-progress/scripts/board.py"
    }
    ```
 
-2. 创建运行并注册项目：
+2. 在当前 session 里创建任务（项目自动来自 session，不用传 project id）：
 
    ```bash
-   $BOARD init --project-id my-project --name "我的项目" --plan-file plan.v1.json
+   $BOARD init --plan-file plan.v1.json
    ```
 
-   输出 `run: <runId>` 与看板 URL。把 URL 放到第一条进度回执里给用户。
+   输出 `task: <taskId>`、任务名（`HH:MM · 标题`）与看板 URL。把 URL 放到第一条进度回执里。
+   需要覆盖会话标题时用 `--session-title`（演示/远程会话会用到）。
 
 3. 启动 hub（若未运行）：
 
@@ -103,6 +107,14 @@ $BOARD exec s5 --agent bg-1 --heartbeat 30 --timeout 1800 -- pytest -q
 非 0 写 `fail`、超时杀进程组；输出实时打印，`--quiet` 可静默。用 DSH 后台任务跑它也可以，
 后台面板看 raw job、看板看步骤，两边都不断更。
 
+子进程还可以用 `LIVE_PROGRESS_*` 环境变量自己上报进度：
+
+```bash
+$BOARD report s5 --percent 60 --agent bg-1 --current "读取数据 60%"
+```
+
+`exec` 也会把输出中形如 `progress: 40` 的行自动转成步骤进度。
+
 规则：
 
 1. **一步一 owner**：同一时间只做一个 step；只有 owner（或 lead）能更新该步。
@@ -118,6 +130,7 @@ $BOARD exec s5 --agent bg-1 --heartbeat 30 --timeout 1800 -- pytest -q
    本任务使用 live-progress 记账。你的步骤是 <stepId>（owner=<agentName>）。
    开始：$BOARD start <stepId> --agent <agentName>
    长命令/后台任务：$BOARD exec <stepId> --agent <agentName> --heartbeat 30 -- <command...>
+   步骤进度：$BOARD report <stepId> --percent <0-100> --agent <agentName> --current "<在做什么>"
    短步骤心跳：$BOARD heartbeat --agent <agentName> --step <stepId> --current "<在做什么>"
    完成：$BOARD done <stepId> --agent <agentName> --evidence <path> --note "<结果>"
    失败：$BOARD fail <stepId> --agent <agentName> --reason "<原因>"
@@ -139,9 +152,9 @@ $BOARD exec s5 --agent bg-1 --heartbeat 30 --timeout 1800 -- pytest -q
 ```bash
 $BOARD status                 # 人读摘要
 $BOARD --json status          # 机器读（当前快照）
-$BOARD status --all           # 所有 run
+$BOARD status --all           # 当前 session 的所有任务
 $BOARD render --all           # 重建 state.json / BOARD.md
-$BOARD prune --keep 20 --dry-run   # 预览旧 run；确认后加 --yes（running 不删）
+$BOARD prune --keep 20 --dry-run   # 预览旧任务；确认后加 --yes（running 不删）
 ```
 
 - 看板“最后更新 N 分钟前”变黄/红：确认对应 agent 是否还在跑；必要时 `board.py status` 复查。
@@ -162,7 +175,7 @@ $BOARD prune --keep 20 --dry-run   # 预览旧 run；确认后加 --yes（runnin
    $BOARD push --to http://127.0.0.1:8770 --project-id shop-api --token <token>
    ```
 
-   也可直接向 `POST /api/ingest` 发送 `{project, run, plan, events, token}`；
+   也可直接向 `POST /api/ingest` 发送 `{project, task, plan, events, token}`（`run` 仍兼容）；
    事件按 `uuid` 幂等，网络重试安全。契约见 `docs/contract.md`。
 
 2. **隧道拉取**：服务器 `serve` 绑本地回环，本地 `ssh -L 8770:127.0.0.1:8770 server`，
@@ -170,7 +183,9 @@ $BOARD prune --keep 20 --dry-run   # 预览旧 run；确认后加 --yes（runnin
 
 安全：默认只绑 `127.0.0.1`；非回环必须 `--allow-remote`；不要把含密钥的内容写进任务备注。
 
-## 多项目
+## 会话（项目）与任务
 
-所有已注册项目都出现在总览页 `/`；每个项目的 run 历史在 `/p/<projectId>`。
-项目 id 使用显式稳定 slug，远程推送必须带上；同名冲突用不同 slug 区分。
+每个 DSH session 是一个项目：总览页 `/` 列出会话，`/p/<sessionId>` 是该会话的任务列表，
+`/r/<sessionId>/<taskId>` 是任务进度表（步骤 + 执行者 + 每步进度）。
+任务名 = 开始时间 + 计划标题；失败重试是新任务，不并回原任务。
+远程会话用独立的 sessionId（如服务器会话），注册为 ingest 项目后推送到本地 hub。
