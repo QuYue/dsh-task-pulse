@@ -48,6 +48,8 @@ assert(captured.spec.order === 1, 'slot order after native todo (0)')
 assert(typeof captured.component === 'function', 'slot component is a function')
 
 assert(typeof captured.exports.__selectTask === 'function', 'selectTask is exposed for tests')
+const clientSource = fs.readFileSync(file, 'utf8')
+assert(clientSource.includes('const task = selectTask(snapshot && snapshot.state, sessionId, sessionUpdatedAt)'), 'component computes task before rendering')
 const state = {
   projects: [{
     id: 'sess-1',
