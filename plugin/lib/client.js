@@ -9,7 +9,11 @@ window.__ModuleLoader__.load({
 
     const CSS = `
 .dsh-lp-card {
-  box-sizing: border-box; width: 100%; margin: 0 0 8px; padding: 0;
+  box-sizing: border-box;
+  width: 100%;
+  width: calc(100% - var(--dsh-composer-side-clearance) - var(--dsh-composer-side-clearance) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset));
+  max-width: calc(var(--dsh-composer-card-max-width) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset));
+  margin: 0 auto 8px; padding: 0; flex: none;
   border: 1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.12));
   border-radius: 10px;
   background: var(--dsw-alias-bg-l1, #131a25);
