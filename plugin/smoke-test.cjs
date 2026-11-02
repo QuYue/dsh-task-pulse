@@ -17,7 +17,7 @@ const sandbox = {
       load(entry) {
         captured.id = entry.id
         const require = (name) => name === 'react'
-          ? { createElement: () => ({}), useState: () => [] }
+          ? { createElement: () => ({}), useState: () => [], useEffect: () => undefined }
           : {}
         captured.exports = entry.factory(require)
       },
@@ -46,4 +46,20 @@ assert(captured.spec.name === 'conversation.input.dock', 'registers on composer 
 assert(captured.spec.id === 'live-progress-card', 'slot entry id')
 assert(captured.spec.order === 1, 'slot order after native todo (0)')
 assert(typeof captured.component === 'function', 'slot component is a function')
+
+assert(typeof captured.exports.__selectTask === 'function', 'selectTask is exposed for tests')
+const state = {
+  projects: [{
+    id: 'sess-1',
+    runs: [
+      { id: 'old', startedAt: '2026-01-01T00:00:00+08:00', status: 'completed' },
+      { id: 'new', startedAt: '2026-01-01T00:10:00+08:00', status: 'running' },
+    ],
+  }],
+}
+const before = Date.parse('2026-01-01T00:05:00+08:00')
+const after = Date.parse('2026-01-01T00:15:00+08:00')
+assert(captured.exports.__selectTask(state, 'sess-1', before).id === 'new', 'selects latest task before next prompt')
+assert(captured.exports.__selectTask(state, 'sess-1', after) === null, 'hides task after new prompt')
+assert(captured.exports.__selectTask(state, 'other', before) === null, 'hides other sessions')
 console.log('client bundle smoke test passed')

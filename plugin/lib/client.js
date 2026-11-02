@@ -135,36 +135,69 @@ window.__ModuleLoader__.load({
       } catch (e) { /* ignore */ }
     }
 
-    // B1 static sample; B2 replaces this with hub data.
-    const SAMPLE = {
-      name: "18:40 · 步骤表内联进度",
-      status: "doing",
-      done: 2,
-      total: 5,
-      percent: 60,
-      elapsed: "12m",
-      steps: [
-        { id: "s1", size: "S", title: "调整 size/进度布局", status: "done", owner: "lead", progress: null, start: "18:40:12", end: "18:44:03", elapsed: "3m51s" },
-        { id: "s2", size: "M", title: "压缩行高与进度条展示", status: "done", owner: "lead", progress: null, start: "18:44:03", end: "18:52:20", elapsed: "8m17s" },
-        { id: "s3", size: "S", title: "增加开始/结束时间列", status: "doing", owner: "coder", progress: 45, start: "18:52:20", end: "", elapsed: "3m", note: "等待接口字段确认" },
-        { id: "s4", size: "M", title: "补充 v2 文档", status: "doing", owner: "tester", progress: 30, start: "18:52:20", end: "", elapsed: "3m" },
-        { id: "s5", size: "S", title: "测试与页面校验", status: "wait", owner: "", progress: null, start: "", end: "", elapsed: "" }
-      ]
-    };
+    const HUB = "http://127.0.0.1:8770";
+    const POLL_MS = 1500;
+    const BEIJING = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Shanghai", hour12: false,
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    });
 
-    const STATUS = {
+    const STEP_STATUS = {
       done: { label: "完成", dot: "dsh-lp-dot-done", color: "#3ddc97" },
-      doing: { label: "进行", dot: "dsh-lp-dot-doing", color: "#4f8cff" },
-      wait: { label: "等待", dot: "dsh-lp-dot-wait", color: "#8892a6" },
-      fail: { label: "失败", dot: "dsh-lp-dot-fail", color: "#ff5f6d" }
+      in_progress: { label: "进行", dot: "dsh-lp-dot-doing", color: "#4f8cff" },
+      blocked: { label: "等待", dot: "dsh-lp-dot-wait", color: "#8892a6" },
+      pending: { label: "等待", dot: "dsh-lp-dot-wait", color: "#8892a6" },
+      failed: { label: "失败", dot: "dsh-lp-dot-fail", color: "#ff5f6d" },
+      skipped: { label: "跳过", dot: "dsh-lp-dot-wait", color: "#8892a6" },
+      superseded: { label: "已取消", dot: "dsh-lp-dot-wait", color: "#8892a6" },
     };
 
-    function statusOf(step) { return STATUS[step.status] || STATUS.wait; }
+    function stepMeta(step) { return STEP_STATUS[step.status] || STEP_STATUS.pending; }
 
-    function stepNo(step) {
-      if (step.seq != null) return step.seq;
-      var index = SAMPLE.steps.indexOf(step);
-      return index >= 0 ? index + 1 : step.id;
+    function taskMeta(status) {
+      if (status === "completed") return { label: "完成", dot: "dsh-lp-dot-done", color: "#3ddc97" };
+      if (status === "failed") return { label: "失败", dot: "dsh-lp-dot-fail", color: "#ff5f6d" };
+      if (status === "running") return { label: "进行", dot: "dsh-lp-dot-doing", color: "#4f8cff" };
+      return { label: "等待", dot: "dsh-lp-dot-wait", color: "#8892a6" };
+    }
+
+    function fmtClock(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      if (isNaN(date.getTime())) return "";
+      try { return BEIJING.format(date); } catch (e) { return String(value).slice(11, 19); }
+    }
+
+    function fmtDuration(ms) {
+      if (ms == null || !isFinite(ms)) return "";
+      const sec = Math.max(0, Math.round(ms / 1000));
+      if (sec < 60) return sec + "s";
+      const min = Math.floor(sec / 60);
+      if (min < 60) return min + "m" + (sec % 60 ? " " + (sec % 60) + "s" : "");
+      const hour = Math.floor(min / 60);
+      return hour + "h" + (min % 60 ? " " + (min % 60) + "m" : "");
+    }
+
+    function stepNo(step, index) {
+      return step && step.seq != null ? step.seq : index + 1;
+    }
+
+    function taskTime(task) {
+      const ms = Date.parse((task && (task.startedAt || task.updatedAt)) || "");
+      return isFinite(ms) ? ms : 0;
+    }
+
+    // Latest task of this session; hidden once the user has submitted a newer prompt.
+    function selectTask(state, sessionId, sessionUpdatedAt) {
+      if (!state || !sessionId || !Array.isArray(state.projects)) return null;
+      const project = state.projects.find((item) => item && (item.id === sessionId || item.sessionId === sessionId));
+      if (!project || !Array.isArray(project.runs)) return null;
+      const tasks = project.runs.slice().sort((a, b) => taskTime(b) - taskTime(a));
+      const task = tasks[0];
+      if (!task) return null;
+      const started = taskTime(task);
+      if (typeof sessionUpdatedAt === "number" && started && started < sessionUpdatedAt) return null;
+      return task;
     }
 
     function progressCell(step) {
@@ -177,26 +210,76 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function LiveProgressCard() {
+    function LiveProgressCard({ sessionId, useSessions }) {
       ensureStyles();
+      const useSessionList = typeof useSessions === "function" ? useSessions : null;
+      const sessionUpdatedAt = useSessionList
+        ? useSessionList((state) => {
+            if (!state || !state.byId || !sessionId) return undefined;
+            const row = state.byId[sessionId];
+            return row ? row.updatedAt : undefined;
+          })
+        : undefined;
+
+      const [snapshot, setSnapshot] = React.useState(null);
       const [open, setOpen] = React.useState(false);
       const [notes, setNotes] = React.useState({});
-      const meta = STATUS[SAMPLE.status] || STATUS.wait;
-      const toggle = () => setOpen((v) => !v);
-      const toggleNote = (id) => setNotes((prev) => Object.assign({}, prev, { [id]: !prev[id] }));
 
-      const activeSteps = SAMPLE.steps.filter((step) => step.status === "doing");
-      const doneCount = SAMPLE.steps.filter((step) => step.status === "done").length;
-      const totalCount = SAMPLE.steps.length;
-      const taskPct = totalCount ? Math.round(doneCount / totalCount * 100) : 0;
+      React.useEffect(() => {
+        if (!sessionId) return undefined;
+        let alive = true;
+        let timer = null;
+        let busy = false;
+        const tick = async () => {
+          if (!alive || busy) return;
+          busy = true;
+          try {
+            const response = await fetch(HUB + "/api/state", { cache: "no-store" });
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            const data = await response.json();
+            if (alive) setSnapshot(data);
+          } catch (e) {
+            if (alive) setSnapshot(null);
+          } finally {
+            busy = false;
+            if (alive) timer = setTimeout(tick, POLL_MS);
+          }
+        };
+        tick();
+        return () => {
+          alive = false;
+          if (timer) clearTimeout(timer);
+        };
+      }, [sessionId]);
+
+      const task = selectTask(snapshot, sessionId, sessionUpdatedAt);
+      if (!task) return null;
+
+      const steps = Array.isArray(task.steps) ? task.steps : [];
+      const activeSteps = steps.filter((step) => step.status === "in_progress");
+      const progress = task.progress || {};
+      const doneCount = progress.done != null ? progress.done : steps.filter((step) => step.status === "done").length;
+      const totalCount = progress.total != null ? progress.total : steps.length;
+      const taskPct = progress.percent != null
+        ? progress.percent
+        : (totalCount ? Math.round(doneCount / totalCount * 100) : 0);
       const barPct = Math.max(0, Math.min(100, taskPct));
-      const head = h("div", { className: "dsh-lp-head", role: "button", tabIndex: 0,
+      const meta = taskMeta(task.status);
+      const toggle = () => setOpen((value) => !value);
+      const toggleNote = (id) => setNotes((prev) => Object.assign({}, prev, { [id]: !prev[id] }));
+      const boardHref = HUB + ((task.urls && task.urls.page) || "/");
+
+      const head = h("div", {
+        className: "dsh-lp-head", role: "button", tabIndex: 0,
         title: open ? "收起任务进度" : "展开任务进度",
         onClick: toggle,
-        onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } } },
+        onKeyDown: (event) => {
+          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggle(); }
+        },
+      },
         h("div", { className: "dsh-lp-line1" },
           h("span", { className: "dsh-lp-dot " + meta.dot }),
-          h("span", { className: "dsh-lp-name" }, SAMPLE.name),
+          h("span", { className: "dsh-lp-name" }, task.title || task.taskTitle || "当前任务"),
           h("span", { className: "dsh-lp-summary" },
             h("span", null, meta.label),
             h("span", { className: "dsh-lp-bar" },
@@ -210,11 +293,11 @@ window.__ModuleLoader__.load({
         h("div", { className: "dsh-lp-line2" },
           activeSteps.length
             ? activeSteps.map((step) => {
-                const st = statusOf(step);
+                const state = stepMeta(step);
                 return h("div", { className: "dsh-lp-active-row", key: step.id },
                   h("span", { className: "dsh-lp-state" },
-                    h("span", { className: "dsh-lp-dot " + st.dot }),
-                    h("span", null, st.label)
+                    h("span", { className: "dsh-lp-dot " + state.dot }),
+                    h("span", null, state.label)
                   ),
                   step.progress != null
                     ? h("span", { className: "dsh-lp-step-progress" },
@@ -225,48 +308,55 @@ window.__ModuleLoader__.load({
                         h("span", { className: "dsh-lp-summary-pct" }, step.progress + "%")
                       )
                     : null,
-                  h("span", { className: "dsh-lp-step-name" }, "#" + stepNo(step) + " " + step.title)
+                  h("span", { className: "dsh-lp-step-name" },
+                    "#" + stepNo(step, steps.indexOf(step)) + " " + step.title)
                 );
               })
-            : h("span", { className: "dsh-lp-current" }, "等待下一步")
+            : h("span", { className: "dsh-lp-current" },
+                task.status === "completed" ? "全部步骤已完成" : "等待下一步")
         )
       );
 
       let body = null;
       if (open) {
-        const rows = SAMPLE.steps.map((step) => {
-          const st = statusOf(step);
+        const rows = steps.map((step, index) => {
+          const state = stepMeta(step);
           const cells = [
-            h("td", { key: "st", style: { color: st.color, whiteSpace: "nowrap" } }, st.label),
+            h("td", { key: "st", style: { color: state.color, whiteSpace: "nowrap" } }, state.label),
             h("td", { key: "title" },
-              h("span", { className: "dsh-lp-id" }, "#" + stepNo(step) + " | " + step.size),
+              h("span", { className: "dsh-lp-id" }, "#" + stepNo(step, index) + " | " + step.size),
               h("span", { className: "dsh-lp-title" }, step.title),
-              step.note ? h("button", { key: "note", type: "button", className: "dsh-lp-note-mark",
-                onClick: (e) => { e.stopPropagation(); toggleNote(step.id); } }, "注") : null
+              step.note ? h("button", {
+                key: "note", type: "button", className: "dsh-lp-note-mark",
+                onClick: (event) => { event.stopPropagation(); toggleNote(step.id); },
+              }, "注") : null
             ),
             h("td", { key: "owner", className: "dsh-lp-owner" }, step.owner || "—"),
             h("td", { key: "progress" }, progressCell(step)),
-            h("td", { key: "time", className: "dsh-lp-time" }, (step.start || "—") + (step.end ? " – " + step.end : "")),
-            h("td", { key: "elapsed", className: "dsh-lp-time" }, step.elapsed || "—")
+            h("td", { key: "time", className: "dsh-lp-time" },
+              (fmtClock(step.startedAt) || "—") + (step.endedAt ? " – " + fmtClock(step.endedAt) : "")),
+            h("td", { key: "elapsed", className: "dsh-lp-time" }, fmtDuration(step.elapsedMs) || "—"),
           ];
           const noteRow = step.note && notes[step.id]
-            ? h("tr", { key: "note-" + step.id }, h("td", { colSpan: 6 }, h("div", { className: "dsh-lp-note" }, "备注：" + step.note)))
+            ? h("tr", { key: "note-" + step.id }, h("td", { colSpan: 6 },
+                h("div", { className: "dsh-lp-note" }, "备注：" + step.note)))
             : null;
           return [h("tr", { key: step.id }, cells), noteRow];
         });
 
         body = h("div", { className: "dsh-lp-body" },
-          h("div", { className: "dsh-lp-meta" }, "用时 " + SAMPLE.elapsed + " · 步骤 " + SAMPLE.steps.length + " 个"),
-          h("div", { className: "dsh-lp-table-wrap" + (SAMPLE.steps.length > 10 ? " dsh-lp-scroll" : "") },
+          h("div", { className: "dsh-lp-meta" }, "步骤 " + steps.length + " 个 · 北京时间"),
+          h("div", { className: "dsh-lp-table-wrap" + (steps.length > 10 ? " dsh-lp-scroll" : "") },
             h("table", { className: "dsh-lp-table" },
               h("thead", null, h("tr", null,
-                ["状态", "步骤", "执行者", "进度", "开始/结束", "耗时"].map((label) => h("th", { key: label }, label))
+                ["状态", "步骤", "执行者", "进度", "开始/结束", "耗时"].map((label) =>
+                  h("th", { key: label }, label))
               )),
               h("tbody", null, rows)
             )
           ),
           h("div", { className: "dsh-lp-actions" },
-            h("a", { className: "dsh-lp-link", href: "http://127.0.0.1:8770/", target: "_blank", rel: "noreferrer" }, "打开完整看板 8770"),
+            h("a", { className: "dsh-lp-link", href: boardHref, target: "_blank", rel: "noreferrer" }, "打开完整看板 8770"),
             h("button", { type: "button", className: "dsh-lp-btn", onClick: toggle }, "收起")
           )
         );
@@ -289,6 +379,9 @@ window.__ModuleLoader__.load({
 
     exports.apply = apply;
     exports.inject = inject;
+    exports.__selectTask = selectTask;
+    exports.__taskMeta = taskMeta;
+    exports.__stepMeta = stepMeta;
     return module.exports;
   }
 });

@@ -248,6 +248,18 @@ class BoardTestCase(unittest.TestCase):
         self.cli("render", "--all")
         self.assertTrue((self.run_dir() / "BOARD.md").exists())
 
+    def test_api_state_allows_cors(self):
+        self.init()
+        self.start_server()
+        with urllib.request.urlopen(
+                f"http://127.0.0.1:{self.port}/api/state", timeout=2) as response:
+            self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), "*")
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}/api/state", method="OPTIONS")
+        with urllib.request.urlopen(request, timeout=2) as response:
+            self.assertEqual(response.status, 204)
+            self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), "*")
+
     def test_ingest_is_idempotent_and_token_protected(self):
         self.init()
         self.start_server()

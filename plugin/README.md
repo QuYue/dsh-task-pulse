@@ -6,19 +6,24 @@ DSH 输入框上方的 live-progress 卡片（静态骨架阶段）。
 - 范围：当前 session 最近一次提问的任务（B2 接入）
 - 内容：任务进度表；折叠/展开；备注 `注`；打开 8770
 
-## 当前状态（B1）
+## 当前状态（B2）
 
 - `lib/client.js`：客户端 bundle（`window.__ModuleLoader__.load`），注册 dock 卡片；
-  目前使用 **静态示例数据**；
+  - 每 1.5s 拉取 hub `GET /api/state`（hub 已加只读 CORS）；
+  - 只显示当前 `sessionId` 的最新任务；
+  - 生命周期：`task.startedAt < 最后一条用户消息（session.updatedAt）` 时隐藏，
+    下一次提问后自动消失，直到该请求创建新任务；
+  - 字段：任务名/状态/任务级进度、进行中步骤多行、绿色步骤条、北京时间、备注、>10 步滚动；
 - `lib/index.js`：Host 侧空实现（无行为）；
-- `preview.html`：不安装 DSH 就能看的静态样式（浏览器直接打开）。
+- `preview.html`：不安装 DSH 就能看的静态样式（浏览器直接打开）；
+- 尚未安装到 DSH（安装属于 B4）。
 
-## B1 验收
+## B2 验收
 
 1. `node --check plugin/lib/client.js` 通过；
-2. 打开 `plugin/preview.html` 能看到折叠卡片，点击头部展开步骤表，点 `注` 展开备注；
-3. `node plugin/smoke-test.cjs` 验证 bundle 注册到 `conversation.input.dock`；
-4. 尚未安装到 DSH（安装属于 B4）。
+2. `node plugin/smoke-test.cjs` 通过（slot 注册 + `selectTask` 生命周期）；
+3. `tests/test_board.py` 的 CORS 测试通过；
+4. 实际 DSH 内渲染要等 B4 安装后验证。
 
 ## 安装（B4 再做，先记录）
 
