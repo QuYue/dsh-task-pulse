@@ -1158,11 +1158,12 @@ class Handler(BaseHTTPRequestHandler):
             status, obj = self.hub.ingest(payload)
             self._send_json(status, obj)
             return
-        if path in ("/", "/index.html") or path.startswith("/p/") or path.startswith("/r/"):
-            self._serve_template()
-            return
         if path == "/favicon.ico":
             self._send(204, b"", "image/x-icon")
+            return
+        if not path.startswith("/api/"):
+            # SPA fallback: the page routes unknown paths itself
+            self._serve_template()
             return
         self._send_json(404, {"ok": False, "error": "not found"})
 
