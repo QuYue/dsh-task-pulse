@@ -24,8 +24,13 @@
     background: var(--panel); color: var(--text); font-size: 12px; line-height: 1.5;
     box-shadow: 0 2px 10px rgba(0,0,0,.25);
   }
-  .dsh-lp-head { display: flex; align-items: center; gap: 6px; padding: 7px 10px; cursor: pointer; user-select: none; }
+  .dsh-lp-head { padding: 6px 10px 7px; cursor: pointer; user-select: none; }
   .dsh-lp-head:hover { background: rgba(127,127,127,.06); border-radius: 9px; }
+  .dsh-lp-line1 { display: flex; align-items: center; gap: 6px; }
+  .dsh-lp-line2 { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding-left: 13px; }
+  .dsh-lp-current { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
+  .dsh-lp-bar { flex: 1; min-width: 40px; height: 4px; border-radius: 999px; background: rgba(127,127,127,.22); overflow: hidden; }
+  .dsh-lp-bar-fill { display: block; height: 100%; border-radius: 999px; background: var(--blue); }
   .dsh-lp-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
   .dsh-lp-dot-done { background: var(--green); }
   .dsh-lp-dot-doing { background: var(--blue); animation: lp-pulse 1.6s infinite; }
@@ -82,7 +87,7 @@
 <script>
 const SAMPLE = {
   name: "18:40 · 步骤表内联进度",
-  status: "doing", done: 2, total: 5, percent: 60, elapsed: "12m",
+  status: "doing", done: 2, total: 5, percent: 40, elapsed: "12m",
   steps: [
     { id: "s1", size: "S", title: "调整 size/进度布局", status: "done", owner: "lead", progress: null, start: "18:40:12", end: "18:44:03", elapsed: "3m51s" },
     { id: "s2", size: "M", title: "压缩行高与进度条展示", status: "done", owner: "lead", progress: null, start: "18:44:03", end: "18:52:20", elapsed: "8m17s" },
@@ -126,11 +131,19 @@ function progressCell(step) {
 function render() {
   root.textContent = "";
   const meta = STATUS[SAMPLE.status];
+  const currentStep = SAMPLE.steps.find((step) => step.status === "doing");
+  const barPct = Math.max(0, Math.min(100, SAMPLE.percent));
   const head = el("div", { className: "dsh-lp-head", role: "button", tabIndex: "0" },
-    el("span", { className: "dsh-lp-dot " + meta.dot }),
-    el("span", { className: "dsh-lp-name" }, SAMPLE.name),
-    el("span", { className: "dsh-lp-summary" }, meta.label + " · " + SAMPLE.done + "/" + SAMPLE.total + " · " + SAMPLE.percent + "%"),
-    el("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸"));
+    el("div", { className: "dsh-lp-line1" },
+      el("span", { className: "dsh-lp-dot " + meta.dot }),
+      el("span", { className: "dsh-lp-name" }, SAMPLE.name),
+      el("span", { className: "dsh-lp-summary" }, meta.label + " · " + SAMPLE.done + "/" + SAMPLE.total + " · " + SAMPLE.percent + "%"),
+      el("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸")),
+    el("div", { className: "dsh-lp-line2" },
+      el("span", { className: "dsh-lp-current" },
+        currentStep ? ("正在：" + currentStep.id + " " + currentStep.title) : "等待下一步"),
+      el("span", { className: "dsh-lp-bar" },
+        el("span", { className: "dsh-lp-bar-fill", style: "width:" + barPct + "%" }))));
   head.addEventListener("click", () => { open = !open; render(); });
 
   let body = null;

@@ -17,11 +17,19 @@ window.__ModuleLoader__.load({
   font-size: 12px; line-height: 1.5;
   box-shadow: 0 1px 2px rgba(0,0,0,.18);
 }
-.dsh-lp-head {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 10px; cursor: pointer; user-select: none;
-}
+.dsh-lp-head { padding: 6px 10px 7px; cursor: pointer; user-select: none; }
 .dsh-lp-head:hover { background: rgba(127,127,127,.06); border-radius: 9px; }
+.dsh-lp-line1 { display: flex; align-items: center; gap: 6px; }
+.dsh-lp-line2 { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding-left: 13px; }
+.dsh-lp-current {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary, #8b98ab); font-size: 11px;
+}
+.dsh-lp-bar {
+  flex: 1; min-width: 40px; height: 4px; border-radius: 999px;
+  background: rgba(127,127,127,.22); overflow: hidden;
+}
+.dsh-lp-bar-fill { display: block; height: 100%; border-radius: 999px; background: #4f8cff; }
 .dsh-lp-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
 .dsh-lp-dot-done { background: #3ddc97; }
 .dsh-lp-dot-doing { background: #4f8cff; animation: dsh-lp-pulse 1.6s infinite; }
@@ -144,15 +152,26 @@ window.__ModuleLoader__.load({
       const toggle = () => setOpen((v) => !v);
       const toggleNote = (id) => setNotes((prev) => Object.assign({}, prev, { [id]: !prev[id] }));
 
+      const currentStep = SAMPLE.steps.find((step) => step.status === "doing");
+      const barPct = Math.max(0, Math.min(100, SAMPLE.percent));
       const head = h("div", { className: "dsh-lp-head", role: "button", tabIndex: 0,
         title: open ? "收起任务进度" : "展开任务进度",
         onClick: toggle,
         onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } } },
-        h("span", { className: "dsh-lp-dot " + meta.dot }),
-        h("span", { className: "dsh-lp-name" }, SAMPLE.name),
-        h("span", { className: "dsh-lp-summary" },
-          meta.label + " · " + SAMPLE.done + "/" + SAMPLE.total + " · " + SAMPLE.percent + "%"),
-        h("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸")
+        h("div", { className: "dsh-lp-line1" },
+          h("span", { className: "dsh-lp-dot " + meta.dot }),
+          h("span", { className: "dsh-lp-name" }, SAMPLE.name),
+          h("span", { className: "dsh-lp-summary" },
+            meta.label + " · " + SAMPLE.done + "/" + SAMPLE.total + " · " + SAMPLE.percent + "%"),
+          h("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸")
+        ),
+        h("div", { className: "dsh-lp-line2" },
+          h("span", { className: "dsh-lp-current" },
+            currentStep ? ("正在：" + currentStep.id + " " + currentStep.title) : "等待下一步"),
+          h("span", { className: "dsh-lp-bar" },
+            h("span", { className: "dsh-lp-bar-fill", style: { width: barPct + "%" } })
+          )
+        )
       );
 
       let body = null;
