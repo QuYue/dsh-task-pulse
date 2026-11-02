@@ -1,6 +1,6 @@
 {
   "name": "dsh-live-progress-card",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "private": true,
   "type": "module",
   "description": "DSH composer dock card for live-progress (v2)",
