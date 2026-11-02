@@ -39,6 +39,9 @@
   .dsh-lp-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
   .dsh-lp-summary { margin-left: auto; flex: none; color: var(--muted); font-size: 11px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
   .dsh-lp-summary-pct { color: #cfd9e6; font-variant-numeric: tabular-nums; }
+  .dsh-lp-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .dsh-lp-step-progress { display: flex; align-items: center; gap: 4px; flex: none; }
+  .dsh-lp-line2 .dsh-lp-bar { width: 56px; }
   .dsh-lp-chevron { flex: none; color: var(--muted); font-size: 11px; }
   .dsh-lp-body { border-top: 1px solid rgba(255,255,255,.08); padding: 6px 10px 8px; }
   .dsh-lp-meta { color: var(--muted); font-size: 11px; margin-bottom: 3px; }
@@ -139,12 +142,20 @@ function render() {
       el("span", { className: "dsh-lp-dot " + meta.dot }),
       el("span", { className: "dsh-lp-name" }, SAMPLE.name),
       el("span", { className: "dsh-lp-summary" },
-        el("span", null, meta.label + " · " + SAMPLE.done + "/" + SAMPLE.total),
+        el("span", null, meta.label),
         el("span", { className: "dsh-lp-bar" },
           el("span", { className: "dsh-lp-bar-fill", style: "width:" + barPct + "%" })),
-        el("span", { className: "dsh-lp-summary-pct" }, SAMPLE.percent + "%")),
+        el("span", { className: "dsh-lp-summary-pct" }, SAMPLE.percent + "%"),
+        el("span", { className: "dsh-lp-count" }, "· " + SAMPLE.done + "/" + SAMPLE.total)),
       el("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸")),
     el("div", { className: "dsh-lp-line2" },
+      currentStep && currentStep.progress != null
+        ? el("span", { className: "dsh-lp-step-progress" },
+            el("span", { className: "dsh-lp-bar" },
+              el("span", { className: "dsh-lp-bar-fill",
+                style: "width:" + Math.max(0, Math.min(100, currentStep.progress)) + "%" })),
+            el("span", { className: "dsh-lp-summary-pct" }, currentStep.progress + "%"))
+        : null,
       el("span", { className: "dsh-lp-current" },
         currentStep ? ("正在：" + currentStep.id + " " + currentStep.title) : "等待下一步")));
   head.addEventListener("click", () => { open = !open; render(); });

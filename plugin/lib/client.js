@@ -46,6 +46,9 @@ window.__ModuleLoader__.load({
   display: flex; align-items: center; gap: 6px;
 }
 .dsh-lp-summary-pct { color: var(--dsw-alias-label-secondary, #cfd9e6); font-variant-numeric: tabular-nums; }
+.dsh-lp-count { color: var(--dsw-alias-label-tertiary, #8b98ab); font-variant-numeric: tabular-nums; }
+.dsh-lp-step-progress { display: flex; align-items: center; gap: 4px; flex: none; }
+.dsh-lp-line2 .dsh-lp-bar { width: 56px; }
 .dsh-lp-chevron { flex: none; color: var(--dsw-alias-label-tertiary, #8b98ab); font-size: 11px; }
 .dsh-lp-body {
   border-top: 1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.08));
@@ -164,15 +167,25 @@ window.__ModuleLoader__.load({
           h("span", { className: "dsh-lp-dot " + meta.dot }),
           h("span", { className: "dsh-lp-name" }, SAMPLE.name),
           h("span", { className: "dsh-lp-summary" },
-            h("span", null, meta.label + " · " + SAMPLE.done + "/" + SAMPLE.total),
+            h("span", null, meta.label),
             h("span", { className: "dsh-lp-bar" },
               h("span", { className: "dsh-lp-bar-fill", style: { width: barPct + "%" } })
             ),
-            h("span", { className: "dsh-lp-summary-pct" }, SAMPLE.percent + "%")
+            h("span", { className: "dsh-lp-summary-pct" }, SAMPLE.percent + "%"),
+            h("span", { className: "dsh-lp-count" }, "· " + SAMPLE.done + "/" + SAMPLE.total)
           ),
           h("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸")
         ),
         h("div", { className: "dsh-lp-line2" },
+          currentStep && currentStep.progress != null
+            ? h("span", { className: "dsh-lp-step-progress" },
+                h("span", { className: "dsh-lp-bar" },
+                  h("span", { className: "dsh-lp-bar-fill",
+                    style: { width: Math.max(0, Math.min(100, currentStep.progress)) + "%" } })
+                ),
+                h("span", { className: "dsh-lp-summary-pct" }, currentStep.progress + "%")
+              )
+            : null,
           h("span", { className: "dsh-lp-current" },
             currentStep ? ("正在：" + currentStep.id + " " + currentStep.title) : "等待下一步")
         )
