@@ -62,4 +62,16 @@ const after = Date.parse('2026-01-01T00:15:00+08:00')
 assert(captured.exports.__selectTask(state, 'sess-1', before).id === 'new', 'selects latest task before next prompt')
 assert(captured.exports.__selectTask(state, 'sess-1', after) === null, 'hides task after new prompt')
 assert(captured.exports.__selectTask(state, 'other', before) === null, 'hides other sessions')
+const projectState = {
+  projects: [{
+    id: 'sess-2',
+    localProjects: [{ id: 'p1', name: 'P1', current: true }],
+    runs: [
+      { id: 'p1-old', startedAt: '2026-01-01T00:00:00+08:00', status: 'completed', localProjectId: 'p2' },
+      { id: 'p2-new', startedAt: '2026-01-01T00:10:00+08:00', status: 'completed', localProjectId: 'p2' },
+    ],
+  }],
+}
+assert(captured.exports.__selectTask(projectState, 'sess-2', before).id === 'p2-new', 'v2: latest session task wins regardless of current project')
+assert(captured.exports.__selectTask(projectState, 'sess-2', after) === null, 'v2: next prompt hides task')
 console.log('client bundle smoke test passed')
