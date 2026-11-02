@@ -17,7 +17,15 @@
 - 通知：完成 / 失败 / 阻塞 / 计划升版 / 停滞；浏览器 + 系统通知
 - 默认不主动使用：用户要求或任务需要时才启用
 
-## v2.0.0 — in progress
+## v2.0.0 — 2026-11-03
 
-DSH 内 composer dock 卡片视图，与网页版并存。规格见
-[docs/v2-card-spec.md](docs/v2-card-spec.md)。
+DSH 输入框上方的 live-progress 卡片（与网页版并存）。
+
+- 位置：`conversation.input.dock`（原生 Todo 同层，order 1）；
+- 数据：每 1.5s 读 hub `/api/state`；只显示当前 session 最新任务；
+- 生命周期：下一次提问后自动隐藏，新任务创建后显示；
+- 折叠栏：任务名、状态、任务级进度条/百分比/完成数、并行进行中步骤（状态胶囊 + 绿色步骤条）；
+- 展开：步骤表（状态/步骤/执行者/进度/北京时间/耗时）、`注`、>10 步滚动；
+- 交互：折叠状态按 session 持久化、打开 8770 任务页；
+- 安装：Desktop profile symlink + `cordis.patch.yml` 的 `- insert:` 条目；
+- 已知限制：需要重启 DSH 才加载；client API 随 DSH 升级需回归。

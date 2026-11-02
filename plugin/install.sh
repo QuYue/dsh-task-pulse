@@ -25,8 +25,9 @@ if ! grep -q "$NAME" "$PATCH"; then
   cat >> "$PATCH" <<YAML
 
 # live-progress v2 card
-- id: $NAME
-  name: "$NAME"
+- insert:
+    - id: $NAME
+      name: "$NAME"
 YAML
   echo "Added loader entry to $PATCH"
 else

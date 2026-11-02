@@ -22,9 +22,12 @@ Desktop profile 由 Electron 应用独占，`dsh plugin --profile desktop add` �
 2. 在 `~/.dsh/profiles/desktop/cordis.patch.yml` 追加：
 
 ```yaml
-- id: dsh-live-progress-card
-  name: "dsh-live-progress-card"
+- insert:
+    - id: dsh-live-progress-card
+      name: "dsh-live-progress-card"
 ```
+
+注意 `- insert:` 是必须的；profile patch 不会直接追加裸 Loader 条目。
 
 然后**重启 DSH Desktop**。
 
