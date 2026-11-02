@@ -467,6 +467,92 @@ class BoardTestCase(unittest.TestCase):
         self.assertEqual(self.run_ids_on_disk(), ["r1", "r3"])
         self.assertTrue((self.session_root() / "tasks" / "r1" / "plan.json").exists())
 
+    # -- revise/plan-change guards --------------------------------------
+    def write_plan(self, plan, name="revised.json"):
+        path = self.base / name
+        path.write_text(json.dumps(plan), encoding="utf-8")
+        return path
+
+    def revise_plan(self, plan, check=True):
+        path = self.write_plan(plan)
+        return self.cli("revise", "--plan-file", str(path), "--reason", "test", "--by", "lead", check=check)
+
+    def plan_copy(self):
+        return json.loads(json.dumps(BASE_PLAN))
+
+    def test_revise_removing_already_superseded_step_does_not_duplicate(self):
+        self.init()
+        plan = self.plan_copy()
+        plan["steps"] = [step for step in plan["steps"] if step["id"] != "s3"]
+        self.revise_plan(plan)
+        self.revise_plan(plan)
+        saved = json.loads((self.run_dir() / "plan.json").read_text())
+        s3 = [step for step in saved["steps"] if step["id"] == "s3"]
+        self.assertEqual(len(s3), 1)
+        self.assertTrue(s3[0]["superseded"])
+
+    def test_revise_rejects_reusing_superseded_step_id(self):
+        self.init()
+        without = self.plan_copy()
+        without["steps"] = [step for step in without["steps"] if step["id"] != "s3"]
+        self.revise_plan(without)
+        result = self.revise_plan(self.plan_copy(), check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("superseded", result.stderr)
+
+    def test_revise_rejects_unknown_dependency(self):
+        self.init()
+        plan = self.plan_copy()
+        plan["steps"][3]["dependsOn"] = ["s9"]
+        result = self.revise_plan(plan, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unknown step", result.stderr)
+
+    def test_revise_rejects_dependency_cycle(self):
+        self.init()
+        plan = self.plan_copy()
+        plan["steps"][0]["dependsOn"] = ["s2"]
+        result = self.revise_plan(plan, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("cycle", result.stderr)
+
+    def test_revise_reopens_completed_task_when_adding_steps(self):
+        self.init()
+        for step in ("s1", "s2", "s3", "s4"):
+            self.cli("start", step, "--agent", "lead")
+            self.cli("done", step, "--agent", "lead")
+        self.cli("close", "--by", "lead")
+        plan = self.plan_copy()
+        plan["steps"].append({
+            "id": "s5", "phaseId": "p1", "title": "追加", "owner": "lead",
+        })
+        self.revise_plan(plan)
+        saved = json.loads((self.run_dir() / "plan.json").read_text())
+        self.assertEqual(saved["status"], "running")
+        self.assertIsNone(saved["completedAt"])
+        self.assertIn("s5", [step["id"] for step in saved["steps"]])
+
+    def test_revise_order_controls_display_order(self):
+        self.init()
+        plan = self.plan_copy()
+        plan["steps"][0]["order"] = 30   # s1
+        plan["steps"][1]["order"] = 10   # s2
+        plan["steps"][2]["order"] = 20   # s3
+        plan["steps"][3]["order"] = 40   # s4
+        self.revise_plan(plan)
+        view = self.status()
+        ids = [step["id"] for step in view["steps"]]
+        self.assertEqual(ids, ["s2", "s3", "s1", "s4"])
+
+    def test_superseded_step_rejects_further_events(self):
+        self.init()
+        plan = self.plan_copy()
+        plan["steps"] = [step for step in plan["steps"] if step["id"] != "s3"]
+        self.revise_plan(plan)
+        result = self.cli("start", "s3", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("superseded", result.stderr)
+
     def test_prune_rejects_keep_zero(self):
         self.init_runs("r1")
         result = self.cli("prune", "--keep", "0", check=False)

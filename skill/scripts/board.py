@@ -546,6 +546,36 @@ def _step_order(value, index: int) -> float:
         return float((index + 1) * 10)
 
 
+def _validate_plan_steps(steps: list) -> None:
+    """Validate unique ids, dependency targets, and dependency cycles."""
+    ids = {}
+    for step in steps:
+        sid = step["id"]
+        if sid in ids:
+            raise SystemExit(f"duplicate step id: {sid}")
+        ids[sid] = step
+    active = {sid: step for sid, step in ids.items() if not step.get("superseded")}
+    for sid, step in active.items():
+        for dep in step.get("dependsOn") or []:
+            if dep == sid:
+                raise SystemExit(f"step {sid} depends on itself")
+            if dep not in ids:
+                raise SystemExit(f"step {sid} depends on unknown step: {dep}")
+    state = {}
+    def visit(sid: str, path: list) -> None:
+        if state.get(sid) == 1:
+            raise SystemExit(f"dependency cycle: {' -> '.join(path + [sid])}")
+        if state.get(sid) == 2:
+            return
+        state[sid] = 1
+        for dep in active[sid].get("dependsOn") or []:
+            if dep in active:
+                visit(dep, path + [sid])
+        state[sid] = 2
+    for sid in active:
+        visit(sid, [])
+
+
 def _coerce_percent(value):
     try:
         number = int(float(value))
@@ -1491,6 +1521,7 @@ def cmd_init(args) -> int:
     (task_dir / "events").mkdir(parents=True, exist_ok=True)
     raw = _load_plan_file(args.plan_file)
     plan = normalize_plan(raw, task_id)
+    _validate_plan_steps(plan["steps"])
     started = now_dt()
     task_name = args.name or f"{started.strftime('%H:%M')} · {plan['title']}"
     plan.update({
@@ -1541,6 +1572,8 @@ def _require_run(args) -> Path:
 def _find_step(plan: dict, step_id: str) -> dict:
     for step in plan.get("steps") or []:
         if step["id"] == step_id:
+            if step.get("superseded"):
+                raise SystemExit(f"step {step_id} was superseded; use a new step id")
             return step
     raise SystemExit(f"unknown step: {step_id}")
 
@@ -1619,6 +1652,8 @@ def cmd_resume(args) -> int:
 
 def cmd_heartbeat(args) -> int:
     run_dir = _require_run(args)
+    if args.step:
+        _find_step(load_plan(run_dir) or {}, slugify(args.step, "s"))
     event = {
         "agent": slugify(args.agent, "agent"), "type": "heartbeat",
         "stepId": slugify(args.step, "s") if args.step else None,
@@ -1872,14 +1907,19 @@ def cmd_revise(args) -> int:
     new = normalize_plan(raw, old.get("runId") or run_dir.name)
     old_steps = {step["id"]: step for step in old.get("steps") or []}
     new_ids = {step["id"] for step in new["steps"]}
+    reused = [sid for sid in new_ids if old_steps.get(sid, {}).get("superseded")]
+    if reused:
+        raise SystemExit(f"cannot reuse superseded step ids: {', '.join(sorted(reused))}")
     added = [sid for sid in new_ids if sid not in old_steps]
-    removed = [sid for sid in old_steps if sid not in new_ids]
+    removed = [sid for sid in old_steps if sid not in new_ids and not old_steps[sid].get("superseded")]
+    carried_superseded = [sid for sid, step in old_steps.items()
+                          if sid not in new_ids and step.get("superseded")]
     changed = []
     for step in new["steps"]:
         previous = old_steps.get(step["id"])
         if not previous:
             continue
-        for field in ("title", "owner", "phaseId", "size", "acceptance", "dependsOn"):
+        for field in ("title", "owner", "phaseId", "size", "acceptance", "dependsOn", "order"):
             if previous.get(field) != step.get(field):
                 changed.append(step["id"])
                 break
@@ -1894,6 +1934,9 @@ def cmd_revise(args) -> int:
         if cancelled["phaseId"] not in {phase["id"] for phase in new["phases"]}:
             new["phases"].append({"id": cancelled["phaseId"], "title": cancelled["phaseId"]})
         new["steps"].append(cancelled)
+    for sid in carried_superseded:
+        new["steps"].append(dict(old_steps[sid]))
+    _validate_plan_steps(new["steps"])
     merged_agents = {agent["id"]: agent for agent in old.get("agents") or []}
     for agent in new["agents"]:
         merged_agents[agent["id"]] = agent
@@ -1904,6 +1947,8 @@ def cmd_revise(args) -> int:
         "reason": args.reason, "added": added, "removed": removed,
         "changed": sorted(set(changed)),
     })
+    old_status = old.get("status", "running")
+    reopened = bool(added) and old_status in ("completed", "failed")
     new.update({
         "sessionId": old.get("sessionId") or old.get("projectId"),
         "projectId": old.get("projectId") or old.get("sessionId"),
@@ -1912,10 +1957,10 @@ def cmd_revise(args) -> int:
         "name": old.get("name") or
                 f"{(parse_ts(old.get('createdAt')) or now_dt()).strftime('%H:%M')} · {new['title']}",
         "revision": revision,
-        "status": old.get("status", "running"),
+        "status": "running" if reopened else old_status,
         "createdAt": old.get("createdAt"),
         "updatedAt": iso(),
-        "completedAt": old.get("completedAt"),
+        "completedAt": None if reopened else old.get("completedAt"),
         "changes": changes,
     })
     save_plan(run_dir, new)
