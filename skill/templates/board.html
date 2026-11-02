@@ -1053,19 +1053,7 @@
     });
     return rows;
   }
-  function taskListView(projects) {
-    var rows = allRunRows(projects);
-    if (!rows.length) return null;
-    var running = 0;
-    for (var k = 0; k < rows.length; k++) {
-      if (str(rows[k].run.status) === 'running') running++;
-    }
-    var card = mk('section', 'card task-list');
-    var head = mk('div', 'task-list-head');
-    head.appendChild(mk('h2', 'task-list-title', '全部任务'));
-    head.appendChild(span('task-list-count', rows.length + ' 个任务 · ' + running + ' 个进行中 · 点击行查看步骤'));
-    card.appendChild(head);
-
+  function taskTable(rows) {
     var wrap = mk('div', 'tasks-wrap');
     var table = mk('table', 'tasks');
     var thead = mk('thead');
@@ -1078,8 +1066,81 @@
     for (var i = 0; i < rows.length; i++) tbody.appendChild(taskRow(rows[i].project, rows[i].run));
     table.appendChild(tbody);
     wrap.appendChild(table);
-    card.appendChild(wrap);
+    return wrap;
+  }
+  function taskListView(projects) {
+    var rows = allRunRows(projects);
+    if (!rows.length) return null;
+    var running = 0;
+    for (var k = 0; k < rows.length; k++) {
+      if (str(rows[k].run.status) === 'running') running++;
+    }
+    var card = mk('section', 'card task-list');
+    var head = mk('div', 'task-list-head');
+    head.appendChild(mk('h2', 'task-list-title', '全部任务'));
+    head.appendChild(span('task-list-count', rows.length + ' 个任务 · ' + running + ' 个进行中 · 点击行查看步骤'));
+    card.appendChild(head);
+    card.appendChild(taskTable(rows));
     return card;
+  }
+  function runRowsForProject(project) {
+    var runs = arr(project && project.runs);
+    var rows = [];
+    for (var i = 0; i < runs.length; i++) {
+      if (isObj(runs[i])) rows.push({ project: project, run: runs[i] });
+    }
+    rows.sort(function (a, b) {
+      var ar = str(a.run.status) === 'running' ? 0 : 1;
+      var br = str(b.run.status) === 'running' ? 0 : 1;
+      if (ar !== br) return ar - br;
+      return (Date.parse(str(b.run.updatedAt)) || 0) - (Date.parse(str(a.run.updatedAt)) || 0);
+    });
+    return rows;
+  }
+  function projectView(route) {
+    var project = findProject(route.projectId);
+    if (!project) {
+      return stateView('找不到项目', '项目「' + str(route.projectId) + '」不存在，或已被从注册表中移除。');
+    }
+    var rows = runRowsForProject(project);
+    var running = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (str(rows[i].run.status) === 'running') running++;
+    }
+    var page = mk('div', 'page');
+    page.appendChild(backLink());
+
+    var hero = mk('section', 'card detail-head');
+    applyAccent(hero, project.color);
+    var line = mk('div', 'project-line');
+    line.appendChild(mk('span', 'pc-dot'));
+    line.appendChild(span('project-name', str(project.name) || str(project.id) || '未命名项目'));
+    var kb = kindBadge(project.kind);
+    if (kb) line.appendChild(kb);
+    var src = str(project.sourceStatus);
+    if (src && src !== 'ok') line.appendChild(mk('span', 'chip warn', '数据源 ' + src));
+    hero.appendChild(line);
+
+    var meta = mk('div', 'meta-row');
+    meta.appendChild(span('meta-item', rows.length + ' 个任务'));
+    if (running) meta.appendChild(statChip('进行中 ' + running, 'stat-info'));
+    var last = str(project.lastActivityAt);
+    if (last) {
+      meta.appendChild(span('meta-item', '最后活动 '));
+      meta.appendChild(agoEl(last, null));
+    }
+    hero.appendChild(meta);
+    page.appendChild(hero);
+
+    var card = mk('section', 'card task-list');
+    var head = mk('div', 'task-list-head');
+    head.appendChild(mk('h2', 'task-list-title', '任务列表'));
+    head.appendChild(span('task-list-count', rows.length + ' 个任务 · 点击行查看步骤'));
+    card.appendChild(head);
+    if (!rows.length) card.appendChild(emptyBox('该项目还没有任务记录。'));
+    else card.appendChild(taskTable(rows));
+    page.appendChild(card);
+    return page;
   }
   function taskRow(project, run) {
     var url = runPageUrl(project, run);
@@ -1593,12 +1654,13 @@
       try { parts.push(decodeURIComponent(raw[i])); } catch (e2) { parts.push(raw[i]); }
     }
     if (!parts.length) return { name: 'overview' };
-    if (parts[0] === 'p' && parts.length === 2) return { name: 'detail', projectId: parts[1], runId: null };
+    if (parts[0] === 'p' && parts.length === 2) return { name: 'project', projectId: parts[1] };
     if (parts[0] === 'r' && parts.length === 3) return { name: 'detail', projectId: parts[1], runId: parts[2] };
     return { name: 'unknown', path: path };
   }
   function routeKey(route) {
     if (route.name === 'detail') return 'detail|' + str(route.projectId) + '|' + str(route.runId);
+    if (route.name === 'project') return 'project|' + str(route.projectId);
     return route.name;
   }
   function scrollYOf() {
@@ -1615,6 +1677,9 @@
         if (r) title = (str(r.title) || '运行详情') + ' · live-progress';
         else if (p) title = (str(p.name) || '项目') + ' · live-progress';
         else title = '未找到 · live-progress';
+      } else if (route.name === 'project') {
+        var pp = findProject(route.projectId);
+        title = pp ? ((str(pp.name) || '项目') + ' · 任务列表 · live-progress') : '未找到 · live-progress';
       } else {
         title = '页面不存在 · live-progress';
       }
@@ -1641,6 +1706,8 @@
       view = overviewView();
     } else if (route.name === 'detail') {
       view = detailView(route);
+    } else if (route.name === 'project') {
+      view = projectView(route);
     } else {
       view = unknownView(route.path);
     }
