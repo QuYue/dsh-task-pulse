@@ -76,6 +76,7 @@
     font-family: var(--mono); font-size: 10px; color: var(--muted);
     background: rgba(127,127,127,.12); border-radius: 4px; padding: 0 4px; margin-right: 4px;
   }
+  .dsh-lp-inline-progress { display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; vertical-align: middle; }
   .dsh-lp-owner { white-space: nowrap; }
   .dsh-lp-time { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
   .dsh-lp-progress { display: flex; align-items: center; gap: 4px; }
@@ -203,8 +204,15 @@ function render() {
     for (const step of SAMPLE.steps) {
       const st = STATUS[step.status];
       const title = el("td", null,
-        el("span", { className: "dsh-lp-id" }, step.id + " | " + step.size),
-        el("span", null, step.title));
+        el("span", { className: "dsh-lp-id" }, "#" + (SAMPLE.steps.indexOf(step) + 1)));
+      if (step.progress != null) {
+        const fill = el("span", { className: "dsh-lp-fill" });
+        fill.style.width = Math.max(0, Math.min(100, step.progress)) + "%";
+        title.appendChild(el("span", { className: "dsh-lp-inline-progress" },
+          el("span", { className: "dsh-lp-track" }, fill),
+          el("span", { className: "dsh-lp-pct" }, step.progress + "%")));
+      }
+      title.appendChild(el("span", null, step.title));
       if (step.note) {
         const mark = el("button", { className: "dsh-lp-note-mark", type: "button" }, "注");
         mark.addEventListener("click", (e) => { e.stopPropagation(); notes[step.id] = !notes[step.id]; render(); });
@@ -214,16 +222,15 @@ function render() {
         el("td", { style: "color:" + st.color + ";white-space:nowrap" }, st.label),
         title,
         el("td", { className: "dsh-lp-owner" }, step.owner || "—"),
-        el("td", null, progressCell(step)),
         el("td", { className: "dsh-lp-time" }, (step.start || "—") + (step.end ? " – " + step.end : "")),
         el("td", { className: "dsh-lp-time" }, step.elapsed || "—")));
       if (step.note && notes[step.id]) {
-        rows.push(el("tr", null, el("td", { colSpan: "6" }, el("div", { className: "dsh-lp-note" }, "备注：" + step.note))));
+        rows.push(el("tr", null, el("td", { colSpan: "5" }, el("div", { className: "dsh-lp-note" }, "备注：" + step.note))));
       }
     }
     const table = el("table", { className: "dsh-lp-table" },
       el("thead", null, el("tr", null,
-        ["状态", "步骤", "执行者", "进度", "开始/结束", "耗时"].map((label) => el("th", null, label)))),
+        ["状态", "步骤", "执行者", "开始/结束", "耗时"].map((label) => el("th", null, label)))),
       el("tbody", null, rows));
     const tableWrap = el("div", { className: "dsh-lp-table-wrap" + (SAMPLE.steps.length > 10 ? " dsh-lp-scroll" : "") }, table);
     const link = el("a", { href: "http://127.0.0.1:8770/", target: "_blank", rel: "noreferrer", className: "dsh-lp-link" }, "打开完整看板 8770");

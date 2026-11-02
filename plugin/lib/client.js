@@ -94,6 +94,10 @@ window.__ModuleLoader__.load({
   font-size: 10px; color: var(--dsw-alias-label-tertiary, #8b98ab);
   background: rgba(127,127,127,.12); border-radius: 4px; padding: 0 4px; margin-right: 4px;
 }
+.dsh-lp-inline-progress {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-right: 4px; vertical-align: middle;
+}
 .dsh-lp-title { overflow-wrap: anywhere; }
 .dsh-lp-owner { white-space: nowrap; }
 .dsh-lp-time { white-space: nowrap; color: var(--dsw-alias-label-tertiary, #8b98ab); font-variant-numeric: tabular-nums; }
@@ -336,7 +340,16 @@ window.__ModuleLoader__.load({
           const cells = [
             h("td", { key: "st", style: { color: state.color, whiteSpace: "nowrap" } }, state.label),
             h("td", { key: "title" },
-              h("span", { className: "dsh-lp-id" }, "#" + stepNo(step, index) + " | " + step.size),
+              h("span", { className: "dsh-lp-id" }, "#" + stepNo(step, index)),
+              step.progress != null
+                ? h("span", { className: "dsh-lp-inline-progress" },
+                    h("span", { className: "dsh-lp-track" },
+                      h("span", { className: "dsh-lp-fill",
+                        style: { width: Math.max(0, Math.min(100, step.progress)) + "%" } })
+                    ),
+                    h("span", { className: "dsh-lp-pct" }, step.progress + "%")
+                  )
+                : null,
               h("span", { className: "dsh-lp-title" }, step.title),
               step.note ? h("button", {
                 key: "note", type: "button", className: "dsh-lp-note-mark",
@@ -344,13 +357,12 @@ window.__ModuleLoader__.load({
               }, "注") : null
             ),
             h("td", { key: "owner", className: "dsh-lp-owner" }, step.owner || "—"),
-            h("td", { key: "progress" }, progressCell(step)),
             h("td", { key: "time", className: "dsh-lp-time" },
               (fmtClock(step.startedAt) || "—") + (step.endedAt ? " – " + fmtClock(step.endedAt) : "")),
             h("td", { key: "elapsed", className: "dsh-lp-time" }, fmtDuration(step.elapsedMs) || "—"),
           ];
           const noteRow = step.note && notes[step.id]
-            ? h("tr", { key: "note-" + step.id }, h("td", { colSpan: 6 },
+            ? h("tr", { key: "note-" + step.id }, h("td", { colSpan: 5 },
                 h("div", { className: "dsh-lp-note" }, "备注：" + step.note)))
             : null;
           return [h("tr", { key: step.id }, cells), noteRow];
@@ -361,7 +373,7 @@ window.__ModuleLoader__.load({
           h("div", { className: "dsh-lp-table-wrap" + (steps.length > 10 ? " dsh-lp-scroll" : "") },
             h("table", { className: "dsh-lp-table" },
               h("thead", null, h("tr", null,
-                ["状态", "步骤", "执行者", "进度", "开始/结束", "耗时"].map((label) =>
+                ["状态", "步骤", "执行者", "开始/结束", "耗时"].map((label) =>
                   h("th", { key: label }, label))
               )),
               h("tbody", null, rows)
