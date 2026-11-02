@@ -46,6 +46,20 @@ BOARD="python3 .dsh/skills/live-progress/scripts/board.py"
 - 本地 hub：`~/.dsh/progress`；沙箱内不可写时自动回退到 `<cwd>/.dsh/progress/hub`。
   多命令务必显式传同一个 `--home`，或设置环境变量 `DSH_PROGRESS_HOME`。
 
+## 一键启动（用户 /live-progress 时）
+
+先确保 hub 在跑，并为当前请求建一个任务（这样卡片立即可见）：
+
+```bash
+$BOARD ensure                       # hub 没开就后台拉起；已开则直接返回 URL
+$BOARD auto --title "当前请求"       # ensure + 新建任务 + start s1（占位）
+# 或者复用当前 session 里最新的 running 任务：
+$BOARD auto --title "当前请求" --reuse
+```
+
+`auto` 先建一个只有一步的占位任务，随后用 `revise` 换成真实计划。
+如果用户只是要求“打开看板”，执行 `ensure` 即可。
+
 ## 启动任务（主 agent，任务分配后的第一个动作）
 
 1. 粗估 3–8 个阶段、每步 5–15 分钟粒度；每步写清 `owner`、`size`、`acceptance`、`dependsOn`。

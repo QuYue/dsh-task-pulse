@@ -20,6 +20,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -1512,6 +1513,111 @@ def _print_run_summary(view: dict, args) -> None:
               + (f"  {step['progress']}%" if step.get("progress") is not None else ""))
 
 
+def _hub_health(url: str) -> bool:
+    try:
+        with urlopen(url.rstrip("/") + "/api/health", timeout=1) as response:
+            return bool(json.loads(response.read().decode("utf-8")).get("ok"))
+    except Exception:
+        return False
+
+
+def cmd_ensure(args) -> int:
+    """Ensure the local hub is running; start it detached if needed."""
+    home = resolve_home(args)
+    home.mkdir(parents=True, exist_ok=True)
+    info = read_json(home / "hub.json") or {}
+    url = info.get("url")
+    if url and _hub_health(url):
+        print(url)
+        return 0
+    port = int(getattr(args, "port", None) or DEFAULT_PORT)
+    log_path = home / "serve.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    command = [sys.executable, str(Path(__file__).resolve()), "--home", str(home)]
+    root = getattr(args, "root", None)
+    if root:
+        command += ["--root", str(root)]
+    command += ["serve", "--port", str(port), "--no-notify"]
+    with open(log_path, "ab") as log:
+        subprocess.Popen(
+            command,
+            stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+            start_new_session=True, cwd=str(Path.cwd()),
+        )
+    deadline = time.time() + 8
+    while time.time() < deadline:
+        info = read_json(home / "hub.json") or {}
+        url = info.get("url")
+        if url and _hub_health(url):
+            print(url)
+            return 0
+        time.sleep(0.15)
+    print(f"hub did not start; see {log_path}", file=sys.stderr)
+    return 2
+
+
+def cmd_auto(args) -> int:
+    """Ensure the hub and create/reuse a task for the current request."""
+    if cmd_ensure(args) != 0:
+        return 2
+    root = resolve_root(args)
+    project_dir = resolve_project_root(args)
+    if getattr(args, "reuse", False):
+        for run_dir in run_dirs(project_dir):
+            view = build_run_view(run_dir)
+            if view and view.get("status") == "running":
+                print(f"reuse task: {view['id']}")
+                print(f"board: {read_json(resolve_home(args) / 'hub.json').get('url')}r/{view['projectId']}/{view['id']}")
+                return 0
+    title = str(getattr(args, "title", None) or "当前请求").strip() or "当前请求"
+    step_title = str(getattr(args, "step", None) or title).strip() or title
+    plan = {
+        "title": title,
+        "goal": "",
+        "phases": [{"id": "p1", "title": "执行"}],
+        "agents": [{"id": "lead", "name": "lead", "role": "主控"}],
+        "steps": [{
+            "id": "s1", "phaseId": "p1", "title": step_title,
+            "owner": "lead", "size": "M", "order": 10,
+            "acceptance": "等待细化计划",
+        }],
+    }
+    fd, plan_path = tempfile.mkstemp(prefix="live-progress-auto-", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(plan, handle, ensure_ascii=False)
+        init_args = argparse.Namespace(**vars(args))
+        init_args.plan_file = plan_path
+        init_args.name = f"{now_dt().strftime('%H:%M')} · {title}"
+        init_args.run = None
+        init_args.session_title = None
+        init_args.color = None
+        init_args.no_register = False
+        if cmd_init(init_args) != 0:
+            return 2
+    finally:
+        try:
+            os.unlink(plan_path)
+        except OSError:
+            pass
+    runs = run_dirs(project_dir)
+    if not runs:
+        return 2
+    run_id = runs[0].name
+    start_args = argparse.Namespace(**vars(args))
+    start_args.step = "s1"
+    start_args.agent = "lead"
+    start_args.note = "auto: waiting for plan refinement"
+    start_args.force = False
+    start_args.run = run_id
+    cmd_start(start_args)
+    view = build_run_view(runs[0]) or {}
+    info = read_json(resolve_home(args) / "hub.json") or {}
+    print(f"task: {run_id}")
+    print(f"board: {info.get('url')}r/{view.get('projectId')}/{run_id}")
+    return 0
+
+
 def cmd_init(args) -> int:
     root = resolve_root(args)
     home = resolve_home(args)
@@ -2375,6 +2481,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--template")
     p.add_argument("--allow-remote", action="store_true")
     p.set_defaults(func=cmd_serve)
+
+    p = sub.add_parser("ensure", parents=[common], help="ensure the hub is running")
+    p.add_argument("--port", type=int, default=DEFAULT_PORT)
+    p.set_defaults(func=cmd_ensure)
+
+    p = sub.add_parser("auto", parents=[common], help="ensure hub and create/reuse a task")
+    p.add_argument("--title")
+    p.add_argument("--step")
+    p.add_argument("--port", type=int, default=DEFAULT_PORT)
+    p.add_argument("--reuse", action="store_true")
+    p.set_defaults(func=cmd_auto)
 
     p = sub.add_parser("task", parents=[common], help="manage tasks")
     p_sub = p.add_subparsers(dest="task_cmd", required=True)

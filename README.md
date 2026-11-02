@@ -56,6 +56,15 @@ live-progress/
 - **v2.0.0**：DSH 输入框上方的原生进度卡片（与网页版并存），
   规格见 [docs/v2-card-spec.md](docs/v2-card-spec.md)，安装见 [docs/b4-install.md](docs/b4-install.md)
 
+## 一键启动
+
+```bash
+python3 skill/scripts/board.py ensure
+python3 skill/scripts/board.py auto --title "当前请求"
+```
+
+`ensure` 会在 hub 未运行时后台拉起；`auto` 会确保 hub 并新建一个占位任务（或 `--reuse` 复用最新 running 任务），随后用真实计划 `revise`。
+
 ## 安装为 DSH skill
 
 任选其一，DSH 会自动发现并热加载：
