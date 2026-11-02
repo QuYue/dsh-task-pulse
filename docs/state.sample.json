@@ -251,9 +251,9 @@
           ],
           "urls": {
             "page": "/r/sample-session/20261102-174540-48db",
-            "boardMd": "/Users/quyue/My_Data/My_Projects/DeepSeek_Harness/live-progress/demo/demo_a/.dsh/progress/sessions/sample-session/tasks/20261102-174540-48db/BOARD.md"
+            "boardMd": "<progress-root>/sessions/sample-session/tasks/20261102-174540-48db/BOARD.md"
           },
-          "dir": "/Users/quyue/My_Data/My_Projects/DeepSeek_Harness/live-progress/demo/demo_a/.dsh/progress/sessions/sample-session/tasks/20261102-174540-48db"
+          "dir": "<progress-root>/sessions/sample-session/tasks/20261102-174540-48db"
         }
       ]
     }
