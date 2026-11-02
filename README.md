@@ -48,7 +48,7 @@
 - 超过 10 个步骤时表格区域滚动；
 - 折叠状态按 session 持久化到 localStorage；
 - 与原生 Todo 同插槽共存（Todo order 0，卡片 order 1），不修改 `todos`；
-- hub 自动发现：扫描 8770–8789，按当前 session 选择对应端口；
+- hub 自动发现：优先 8770，扫描 8770–8789，按当前 session 选择对应 hub；
 - 版式：与原生 Todo/正文列同宽、20px 圆角、无外边框、输入框同色背景；
 - 「打开完整看板 8770」跳到任务页；
 - 与网页版并存，不替代。
@@ -85,14 +85,16 @@ ln -s "$PWD/live-progress/skill" ~/.dsh/skills/live-progress
 
 DSH 会自动发现并热加载。
 
-### 2）启动看板
+### 2）启动看板（一个共享 hub）
 
 ```bash
 python3 skill/scripts/board.py ensure
 # 打开 http://127.0.0.1:8770/
 ```
 
-`ensure` 会在 hub 未运行时后台拉起；`serve --port 8770 --open` 可手动前台启动。
+所有项目共用 **8770** 这一个 hub：`ensure` 先探测 8770，已运行就直接复用，不会为每个 session 再起一个新服务。
+新项目 `init` 时会把自己的 project 目录注册到这个 hub（`POST /api/project/register`），
+hub 直接读取各项目的本地数据目录。`serve --port 8770 --open` 可手动前台启动。
 
 ### 3）跑演示
 

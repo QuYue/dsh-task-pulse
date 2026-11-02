@@ -50,24 +50,28 @@
    DSH Web 端口需要认证，直接用 curl 访问 `/plugins/...` 可能返回 401/404，不代表插件没加载；
    以 DSH 页面里的实际效果为准。
 
-## 某个 session 的卡片不显示（hub 在 8771 等端口）
+## 一个共享 hub（8770）
 
-卡片插件会自动扫描本地 `8770–8789`，选择包含当前 session 的 hub。
-如果你确认任务存在但卡片没显示，先看该 session 的 `board.py status` 输出的看板端口：
+所有项目共用一个 hub：
+
+- `ensure` 先探测 `http://127.0.0.1:8770/api/health`；已运行就直接复用；
+- 不会为每个 session 再起一个新 live-progress 服务；
+- 新项目 `init` 会 `POST /api/project/register`，把 project 目录注册到 8770；
+- 卡片优先读 8770，并保留 8770–8789 扫描作为兜底，按当前 session 选择 hub。
+
+如果某个 session 的任务在 8770 上看不到：
 
 ```bash
 $B status | tail -2
-# 看板: http://127.0.0.1:8771/r/...
+# 看板应是 http://127.0.0.1:8770/...
 ```
 
-早期插件只连 8770，而 8770 被另一个项目占用时，hub 会自动落到 8771；
-新版本已支持多 hub 自动发现。仍不显示时，可以显式指定：
+仍指向 8771 时，说明是旧版脚本启动的旧 hub：重启 8770 hub 后重新 `init`/`ensure` 即可。
+也可以显式指定：
 
 ```js
-localStorage.setItem("dsh-lp-hub", "http://127.0.0.1:8771")
+localStorage.setItem("dsh-lp-hub", "http://127.0.0.1:8770")
 ```
-
-然后刷新/重启 DSH。
 
 ## 原生 Todo 和卡片的关系
 

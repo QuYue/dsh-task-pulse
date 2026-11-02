@@ -260,6 +260,27 @@ class BoardTestCase(unittest.TestCase):
             self.assertEqual(response.status, 204)
             self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), "*")
 
+    def test_project_register_api_adds_local_project(self):
+        self.init()
+        self.start_server()
+        other = self.base / "other-project"
+        (other / "tasks").mkdir(parents=True)
+        payload = {
+            "projectId": "other-session",
+            "sessionId": "other-session",
+            "name": "Other",
+            "path": str(other),
+        }
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}/api/project/register",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(request, timeout=2) as response:
+            self.assertEqual(response.status, 200)
+        data = self.wait_state(
+            lambda state: "other-session" in [project["id"] for project in state["projects"]])
+        self.assertIn("other-session", [project["id"] for project in data["projects"]])
+
     def test_ingest_is_idempotent_and_token_protected(self):
         self.init()
         self.start_server()

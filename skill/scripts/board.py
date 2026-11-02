@@ -192,6 +192,36 @@ def resolve_home(args) -> Path:
     return Path(args.home).expanduser().resolve() if getattr(args, "home", None) else default_home()
 
 
+def _hub_health_url(base: str) -> bool:
+    try:
+        with urlopen(base.rstrip("/") + "/api/health", timeout=1) as response:
+            return bool(json.loads(response.read().decode("utf-8")).get("ok"))
+    except Exception:
+        return False
+
+
+def register_with_local_hub(project_dir: Path, session_id: str, name: str,
+                            port: int = DEFAULT_PORT) -> bool:
+    """Register this project with the one shared hub, if it is already running."""
+    base = f"http://127.0.0.1:{port}"
+    if not _hub_health_url(base):
+        return False
+    payload = {
+        "projectId": session_id,
+        "sessionId": session_id,
+        "name": name,
+        "path": str(Path(project_dir).resolve()),
+    }
+    try:
+        request = Request(base + "/api/project/register",
+                          data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                          headers={"Content-Type": "application/json"}, method="POST")
+        with urlopen(request, timeout=3) as response:
+            return response.status == 200
+    except Exception:
+        return False
+
+
 def resolve_root(args) -> Path:
     if getattr(args, "root", None):
         return Path(args.root).expanduser().resolve()
@@ -1361,6 +1391,28 @@ class Handler(BaseHTTPRequestHandler):
             status, obj = self.hub.ingest(payload)
             self._send_json(status, obj)
             return
+        if parsed.path == "/api/project/register":
+            try:
+                payload = json.loads(self._read_body() or b"{}")
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": f"invalid JSON: {exc}"})
+                return
+            project_id = str(payload.get("projectId") or payload.get("sessionId") or "").strip()
+            path = str(payload.get("path") or "").strip()
+            if not project_id or not path:
+                self._send_json(400, {"ok": False, "error": "projectId and path are required"})
+                return
+            project_path = Path(path).expanduser()
+            if not project_path.is_dir():
+                self._send_json(400, {"ok": False, "error": "project path does not exist"})
+                return
+            entry = register_project(
+                self.hub.home, project_id,
+                name=str(payload.get("name") or project_id),
+                kind="local", path=str(project_path), session_id=project_id,
+            )
+            self._send_json(200, {"ok": True, "project": entry})
+            return
         if parsed.path == "/api/task/delete":
             try:
                 payload = json.loads(self._read_body() or b"{}")
@@ -1522,12 +1574,16 @@ def _hub_health(url: str) -> bool:
 
 
 def cmd_ensure(args) -> int:
-    """Ensure the local hub is running; start it detached if needed."""
+    """Ensure the one shared hub is running on 8770; do not start a second port."""
     home = resolve_home(args)
     home.mkdir(parents=True, exist_ok=True)
+    shared = f"http://127.0.0.1:{DEFAULT_PORT}/"
+    if _hub_health(shared):
+        print(shared)
+        return 0
     info = read_json(home / "hub.json") or {}
     url = info.get("url")
-    if url and _hub_health(url):
+    if url and _hub_health(url) and (info.get("port") == DEFAULT_PORT):
         print(url)
         return 0
     port = int(getattr(args, "port", None) or DEFAULT_PORT)
@@ -1654,6 +1710,7 @@ def cmd_init(args) -> int:
     if not args.no_register:
         register_project(home, session_id, name=project_name, color=args.color,
                          kind="local", path=project_dir, session_id=session_id)
+        register_with_local_hub(project_dir, session_id, project_name)
     view = render_run(task_dir)
     if args.json_out:
         print(json.dumps({"taskId": task_id, "projectId": session_id,
