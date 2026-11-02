@@ -143,7 +143,11 @@ window.__ModuleLoader__.load({
       } catch (e) { /* ignore */ }
     }
 
-    const HUB = "http://127.0.0.1:8770";
+    const HUB_PORTS = [];
+    for (let port = 8770; port <= 8789; port += 1) {
+      HUB_PORTS.push("http://127.0.0.1:" + port);
+    }
+    let cachedHub = null;
     const POLL_MS = 1500;
     const BEIJING = new Intl.DateTimeFormat("en-GB", {
       timeZone: "Asia/Shanghai", hour12: false,
@@ -208,6 +212,33 @@ window.__ModuleLoader__.load({
       return task;
     }
 
+    async function loadHubState(sessionId) {
+      if (!sessionId) return null;
+      const candidates = [];
+      try {
+        const override = localStorage.getItem("dsh-lp-hub");
+        if (override) candidates.push(override.replace(/\/$/, ""));
+      } catch (e) { /* ignore */ }
+      if (cachedHub) candidates.push(cachedHub);
+      for (const base of HUB_PORTS) {
+        if (candidates.indexOf(base) < 0) candidates.push(base);
+      }
+      for (const base of candidates) {
+        try {
+          const response = await fetch(base + "/api/state", { cache: "no-store" });
+          if (!response.ok) continue;
+          const data = await response.json();
+          const projects = Array.isArray(data.projects) ? data.projects : [];
+          if (projects.some((project) => project && (project.id === sessionId || project.sessionId === sessionId))) {
+            cachedHub = base;
+            return { state: data, hub: base };
+          }
+        } catch (e) { /* try next hub */ }
+      }
+      cachedHub = null;
+      return null;
+    }
+
     function progressCell(step) {
       if (step.progress == null) return h("span", { className: "dsh-lp-time" }, "—");
       return h("span", { className: "dsh-lp-progress" },
@@ -249,10 +280,8 @@ window.__ModuleLoader__.load({
           if (!alive || busy) return;
           busy = true;
           try {
-            const response = await fetch(HUB + "/api/state", { cache: "no-store" });
-            if (!response.ok) throw new Error("HTTP " + response.status);
-            const data = await response.json();
-            if (alive) setSnapshot(data);
+            const loaded = await loadHubState(sessionId);
+            if (alive) setSnapshot(loaded);
           } catch (e) {
             if (alive) setSnapshot(null);
           } finally {
@@ -267,7 +296,7 @@ window.__ModuleLoader__.load({
         };
       }, [sessionId]);
 
-      const task = selectTask(snapshot, sessionId, sessionUpdatedAt);
+      const task = selectTask(snapshot && snapshot.state, sessionId, sessionUpdatedAt);
       if (!task) return null;
 
       const steps = Array.isArray(task.steps) ? task.steps : [];
@@ -282,7 +311,7 @@ window.__ModuleLoader__.load({
       const meta = taskMeta(task.status);
       const toggle = () => setOpen((value) => !value);
       const toggleNote = (id) => setNotes((prev) => Object.assign({}, prev, { [id]: !prev[id] }));
-      const boardHref = HUB + ((task.urls && task.urls.page) || "/");
+      const boardHref = (snapshot.hub || HUB_PORTS[0]) + ((task.urls && task.urls.page) || "/");
 
       const head = h("div", {
         className: "dsh-lp-head", role: "button", tabIndex: 0,
