@@ -206,6 +206,8 @@ def _hub_health_url(base: str) -> bool:
 def register_with_local_hub(project_dir: Path, session_id: str, name: str,
                             port: int = DEFAULT_PORT) -> bool:
     """Register this project with the one shared hub, if it is already running."""
+    if os.environ.get("TASK_PULSE_NO_HUB"):
+        return False
     base = f"http://127.0.0.1:{port}"
     if not _hub_health_url(base):
         return False

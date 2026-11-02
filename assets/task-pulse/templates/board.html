@@ -148,6 +148,7 @@
     white-space: nowrap; max-width: 230px; overflow: hidden; text-overflow: ellipsis;
     vertical-align: middle;
   }
+  .chip.accent { color: #8fc1ff; border-color: rgba(79, 140, 255, .35); background: rgba(79, 140, 255, .1); }
   .chip.rev { color: #c8b3ff; border-color: rgba(167, 107, 255, .35); background: rgba(167, 107, 255, .1); font-weight: 600; }
   .chip.kind-local { color: #8fc1ff; border-color: rgba(79, 140, 255, .35); background: rgba(79, 140, 255, .1); }
   .chip.kind-remote { color: #c8b3ff; border-color: rgba(167, 107, 255, .35); background: rgba(167, 107, 255, .1); }
@@ -1490,13 +1491,25 @@
     }
     var cardsHead = mk('div', 'section-head');
     cardsHead.appendChild(mk('h2', 'section-title', '项目'));
-    cardsHead.appendChild(span('section-hint', '按项目聚合的当前状态'));
+    cardsHead.appendChild(span('section-hint', '一个 session 下的逻辑项目'));
     page.appendChild(cardsHead);
     var cards = mk('div', 'cards');
+    var cardCount = 0;
     for (var i = 0; i < projects.length; i++) {
-      if (isObj(projects[i])) cards.appendChild(projectCard(projects[i]));
+      var session = projects[i];
+      if (!isObj(session)) continue;
+      var locals = arr(session.localProjects);
+      if (locals.length) {
+        for (var li = 0; li < locals.length; li++) {
+          cards.appendChild(localProjectCard(session, locals[li]));
+          cardCount++;
+        }
+      } else {
+        cards.appendChild(projectCard(session));
+        cardCount++;
+      }
     }
-    if (!cards.children.length) page.appendChild(emptyBox('还没有可展示的项目。'));
+    if (!cardCount) page.appendChild(emptyBox('还没有可展示的项目。'));
     else page.appendChild(cards);
     return page;
   }
@@ -1528,6 +1541,40 @@
     var c = safeColor(color, '');
     if (c) el.style.setProperty('--accent', c);
     return el;
+  }
+  function localProjectCard(session, local) {
+    var sid = str(session.id);
+    var lid = str(local.id);
+    var card = mk('a', 'project-card');
+    card.href = '/p/' + encodeURIComponent(sid) + '?project=' + encodeURIComponent(lid);
+    card.setAttribute('data-nav', '');
+    applyAccent(card, session.color);
+    var head = mk('div', 'pc-head');
+    head.appendChild(mk('span', 'pc-dot'));
+    head.appendChild(mk('span', 'pc-name', str(local.name) || lid || '未命名项目'));
+    if (local.current) head.appendChild(mk('span', 'chip accent', '当前'));
+    card.appendChild(head);
+    card.appendChild(span('pc-nodata', str(session.name) || sid));
+    var runs = arr(session.runs).filter(function (run) { return str(run.localProjectId) === lid; });
+    var run = runs.slice().sort(function (a, b) {
+      return (Date.parse(str(b.updatedAt)) || 0) - (Date.parse(str(a.updatedAt)) || 0);
+    })[0];
+    var runLine = mk('div', 'pc-run');
+    if (run) {
+      runLine.appendChild(mk('span', 'pc-run-title', str(run.title) || '未命名运行'));
+      runLine.appendChild(statusPill(RUN_STATUS, run.status));
+    } else {
+      runLine.appendChild(span('pc-run-title dim', '暂无任务'));
+    }
+    card.appendChild(runLine);
+    if (run) card.appendChild(progressBar(progressOf(run), false));
+    else card.appendChild(span('pc-nodata', '0 个任务'));
+    var foot = mk('div', 'pc-foot');
+    foot.appendChild(span('', (local.tasks || 0) + ' 个任务'));
+    if (local.running) foot.appendChild(span('chip', '进行中 ' + local.running));
+    foot.appendChild(span('pc-go', '查看 →'));
+    card.appendChild(foot);
+    return card;
   }
   function projectCard(project) {
     var run = latestRun(project);

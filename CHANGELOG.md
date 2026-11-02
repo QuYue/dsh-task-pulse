@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.3.0 — 2026-11-03
+
+- 总览看板改为按**逻辑 project** 展开：每个 project 一张卡片，不再只显示 session；
+- 空 project 也有独立卡片，显示任务数/当前标记；
+- session 页保留项目筛选栏；
+- 测试不再注册到共享 hub，避免 `test-session` 污染看板。
+
 ## v3.2.3 — 2026-11-03
 
 - DSH 卡片显示当前 project：

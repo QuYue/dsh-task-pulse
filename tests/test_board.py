@@ -66,6 +66,7 @@ class BoardTestCase(unittest.TestCase):
             [PY, str(BOARD), "--home", str(self.home), "--root", str(self.root),
              "--session", self.session, *args],
             capture_output=True, text=True,
+            env={**os.environ, "TASK_PULSE_NO_HUB": "1"},
         )
         if check and result.returncode != 0:
             self.fail(f"board.py {' '.join(args)} failed: {result.stderr}")
