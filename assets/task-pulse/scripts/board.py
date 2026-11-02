@@ -182,6 +182,9 @@ def default_home() -> Path:
     preferred = Path.home() / ".dsh" / "progress"
     try:
         preferred.mkdir(parents=True, exist_ok=True)
+        probe = preferred / ".write-test"
+        probe.write_text("", encoding="utf-8")
+        probe.unlink()
         return preferred
     except OSError:
         # sandboxed session (workspace-write): keep the hub inside the workspace

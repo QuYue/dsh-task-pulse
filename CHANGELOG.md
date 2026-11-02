@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.0.1 — 2026-11-03
+
+- 修复 sandbox 下 `~/.dsh/progress` 不可写时 `default_home()` 误返回不可写目录，
+  导致 `/tp task new` 报 `.projects.lock` EPERM 的问题；
+- 现在会探测可写性，失败则回退到 `<cwd>/.dsh/progress/hub`。
+
 ## v3.0.0 — 2026-11-03
 
 TaskPulse 单包重构。
