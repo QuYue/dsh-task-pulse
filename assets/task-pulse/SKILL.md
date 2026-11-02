@@ -8,7 +8,8 @@ whenToUse: 任务预计超过约 10 分钟，或会派生子 agent、后台任�
 
 ## 心智模型
 
-- **项目 = 一个 DSH Session**：`$DSH_SESSION_ID`，名称取 DSH 自动生成的会话标题。
+- **Session = 一个 DSH 工作区**：`$DSH_SESSION_ID`。
+- **Project = session 下的逻辑项目**：默认 `default`；`/tp project` 管理 current project。
 - **任务 = 用户的一次请求**：一次 `init` 一个任务，名称自动为 `HH:MM · 计划标题`；失败重试 = 新任务。
 - **步骤 = 任务拆分**：可并行，可带独立进度（0–100）。
 - **计划**（`plan.json`）：主 agent 写，带 `revision`。回答“要做哪些事、谁负责、依赖谁”。
@@ -67,6 +68,10 @@ $BOARD auto --title "当前请求" --reuse
 /tp server start       # ensure 8770
 /tp server stop        # 停 8770 hub
 /tp server status      # hub / 当前 task
+/tp project new [名称]  # 新建逻辑 project 并切换
+/tp project use <名称>  # 切换 current project
+/tp project rename "新名称"
+/tp project list
 /tp task new ["标题"] [内容...]   # 新建占位任务并唤醒模型
 /tp task update ["标题"] [内容...]  # 继续当前 task，不新建
 /tp task auto ["标题"] [内容...]  # 有 running 当前 task 则 continue，否则 new
@@ -74,7 +79,8 @@ $BOARD auto --title "当前请求" --reuse
 /tp help
 ```
 
-`/task-pulse` 是 skill 入口（模型判断）；`/tp` 是确定性命令。
+`/task-pulse` 是 skill 入口（模型判断）；`/tp` 是确定性命令。  
+一个 DSH session 可以有多个逻辑 project；`/tp task *` 默认作用于 current project。
 
 ## 启动任务（主 agent，任务分配后的第一个动作）
 

@@ -254,14 +254,128 @@ def resolve_project_root(args) -> Path:
     return resolve_root(args) / "sessions" / resolve_session_id(args)
 
 
+def projects_path(session_dir: Path) -> Path:
+    return Path(session_dir) / "projects"
+
+
+def _project_meta(project_dir: Path) -> dict:
+    data = read_json(Path(project_dir) / "project.json")
+    return dict(data) if isinstance(data, dict) else {}
+
+
+def _write_project_meta(project_dir: Path, project_id: str, name: str) -> dict:
+    project_dir = Path(project_dir)
+    project_dir.mkdir(parents=True, exist_ok=True)
+    meta = _project_meta(project_dir)
+    meta.setdefault("id", project_id)
+    meta.setdefault("createdAt", iso())
+    meta["name"] = name or project_id
+    write_json(project_dir / "project.json", meta)
+    return meta
+
+
+def _new_project_id(session_dir: Path, name: str) -> str:
+    base = slugify(name, "project") or "project"
+    projects = projects_path(session_dir)
+    candidate = base
+    index = 2
+    while (projects / candidate).exists():
+        candidate = f"{base}-{index}"
+        index += 1
+    return candidate
+
+
+def ensure_project_layout(session_dir: Path, session_id: str) -> Path:
+    """Create projects/default and migrate legacy session-level tasks on first use."""
+    session_dir = Path(session_dir)
+    projects = projects_path(session_dir)
+    if projects.is_dir():
+        pointer = read_json(session_dir / "current_project.json")
+        if isinstance(pointer, dict) and (projects / str(pointer.get("projectId") or "")).is_dir():
+            return projects / str(pointer["projectId"])
+        candidates = [p for p in sorted(projects.iterdir()) if p.is_dir() and (p / "project.json").exists()]
+        if candidates:
+            write_json(session_dir / "current_project.json", {
+                "projectId": candidates[0].name, "updatedAt": iso(),
+            })
+            return candidates[0]
+    project_id = "default"
+    project_dir = projects / project_id
+    (project_dir / "tasks").mkdir(parents=True, exist_ok=True)
+    legacy_tasks = session_dir / "tasks"
+    if legacy_tasks.is_dir():
+        for child in list(legacy_tasks.iterdir()):
+            target = project_dir / "tasks" / child.name
+            if target.exists():
+                continue
+            shutil.move(str(child), str(target))
+        try:
+            legacy_tasks.rmdir()
+        except OSError:
+            pass
+    legacy_pointer = session_dir / "current_task.json"
+    if legacy_pointer.exists() and not (project_dir / "current_task.json").exists():
+        shutil.move(str(legacy_pointer), str(project_dir / "current_task.json"))
+    project_name = session_title(session_id) or "默认项目"
+    _write_project_meta(project_dir, project_id, project_name)
+    write_json(session_dir / "current_project.json", {
+        "projectId": project_id, "updatedAt": iso(),
+    })
+    return project_dir
+
+
+def active_project_dir(args) -> Path:
+    session_id = resolve_session_id(args)
+    session_dir = resolve_project_root(args)
+    ensure_project_layout(session_dir, session_id)
+    projects = projects_path(session_dir)
+    pointer = read_json(session_dir / "current_project.json") or {}
+    requested = str(getattr(args, "project", None) or "").strip()
+    chosen = None
+    if requested:
+        direct = projects / slugify(requested, "project")
+        if direct.is_dir():
+            chosen = direct
+        else:
+            for candidate in sorted(projects.iterdir()):
+                if candidate.is_dir() and _project_meta(candidate).get("name") == requested:
+                    chosen = candidate
+                    break
+    if chosen is None:
+        chosen = projects / str(pointer.get("projectId") or "default")
+    if not chosen.is_dir():
+        chosen = ensure_project_layout(session_dir, session_id)
+    if pointer.get("projectId") != chosen.name:
+        write_json(session_dir / "current_project.json", {
+            "projectId": chosen.name, "updatedAt": iso(),
+        })
+    return chosen
+
+
+def list_local_projects(session_dir: Path) -> list:
+    projects = projects_path(session_dir)
+    if not projects.is_dir():
+        return []
+    return [p for p in sorted(projects.iterdir()) if p.is_dir() and (p / "project.json").exists()]
+
+
 def tasks_path(base: Path) -> Path:
     return Path(base) / "tasks"
 
 
 def run_dirs(base: Path):
-    """Task dirs under a session project (legacy `runs/` layout still readable)."""
+    """Task dirs under a session or logical project; legacy layouts still readable."""
+    base = Path(base)
+    projects = projects_path(base)
+    if projects.is_dir():
+        found = []
+        for project_dir in sorted(projects.iterdir()):
+            if project_dir.is_dir():
+                found.extend(run_dirs(project_dir))
+        found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return found
     for folder_name in ("tasks", "runs"):
-        folder = Path(base) / folder_name
+        folder = base / folder_name
         if folder.exists():
             found = [p for p in folder.iterdir() if p.is_dir() and (p / "plan.json").exists()]
             if found:
@@ -271,11 +385,22 @@ def run_dirs(base: Path):
 
 
 def resolve_run(base: Path, run_id: str | None = None) -> Path | None:
+    base = Path(base)
     if run_id:
+        wanted = slugify(run_id, "task")
         for folder_name in ("tasks", "runs"):
-            candidate = Path(base) / folder_name / slugify(run_id, "task")
+            candidate = base / folder_name / wanted
             if (candidate / "plan.json").exists():
                 return candidate
+        projects = projects_path(base)
+        if projects.is_dir():
+            for project_dir in sorted(projects.iterdir()):
+                if not project_dir.is_dir():
+                    continue
+                for folder_name in ("tasks", "runs"):
+                    candidate = project_dir / folder_name / wanted
+                    if (candidate / "plan.json").exists():
+                        return candidate
         return None
     dirs = run_dirs(base)
     return dirs[0] if dirs else None
@@ -371,18 +496,13 @@ def delete_task(home: Path, project_id: str, task_id: str):
     if project is None:
         return False, f"unknown project: {project_id}"
     base = project_base(home, project)
-    target = None
-    for folder_name in ("tasks", "runs"):
-        candidate = base / folder_name / task_id
-        if (candidate / "plan.json").exists():
-            target = candidate
-            break
-    if target is None:
+    target = resolve_run(base, task_id)
+    if target is None or not (target / "plan.json").exists():
         return False, f"unknown task: {task_id}"
     try:
         resolved = target.resolve()
         base_resolved = base.resolve()
-        if resolved.parent.parent != base_resolved or resolved.parent.name not in ("tasks", "runs"):
+        if base_resolved not in resolved.parents or resolved.parent.name not in ("tasks", "runs"):
             return False, "refusing to delete outside the task directory"
         shutil.rmtree(resolved)
     except OSError as exc:
@@ -825,13 +945,16 @@ def build_run_view(run_dir: Path, now: datetime | None = None) -> dict | None:
             updated_at = last_ts
 
     task_title = plan.get("name") or plan.get("title") or ""
-    return {
+    view = {
         "id": plan.get("taskId") or plan.get("runId") or run_dir.name,
         "projectId": plan.get("projectId") or plan.get("sessionId") or "",
         "sessionId": plan.get("sessionId") or plan.get("projectId") or "",
         "title": task_title,
         "taskTitle": plan.get("title", ""),
         "goal": plan.get("goal", ""),
+        "localProjectId": plan.get("localProjectId") or (run_dir.parent.parent.name if run_dir.parent.name == "tasks" else ""),
+        "localProjectName": plan.get("localProjectName") or "",
+        "isCurrentProject": False,
         "status": plan.get("status", "running"),
         "revision": int(plan.get("revision") or 1),
         "startedAt": plan.get("createdAt"),
@@ -852,6 +975,18 @@ def build_run_view(run_dir: Path, now: datetime | None = None) -> dict | None:
         },
         "dir": str(run_dir),
     }
+    try:
+        local_dir = run_dir.parent.parent if run_dir.parent.name == "tasks" else None
+        if local_dir is not None:
+            meta = _project_meta(local_dir)
+            view["localProjectId"] = local_dir.name
+            view["localProjectName"] = str(meta.get("name") or local_dir.name)
+            session_dir = local_dir.parent.parent
+            pointer = read_json(session_dir / "current_project.json")
+            view["isCurrentProject"] = isinstance(pointer, dict) and pointer.get("projectId") == local_dir.name
+    except Exception:
+        pass
+    return view
 
 
 def _is_superseded(plan_steps: list, step_id: str) -> bool:
@@ -876,7 +1011,14 @@ def build_global_state(home: Path, now: datetime | None = None) -> dict:
         if not base.exists():
             status = "missing"
         else:
-            for run_dir in run_dirs(base)[:10]:
+            all_dirs = run_dirs(base)
+            selected = all_dirs[:10]
+            pointer = read_json(base / "current_project.json")
+            if isinstance(pointer, dict) and pointer.get("projectId"):
+                current_project = base / "projects" / str(pointer["projectId"])
+                current_dirs = run_dirs(current_project) if current_project.is_dir() else []
+                selected = current_dirs + [item for item in all_dirs if item not in current_dirs][:10]
+            for run_dir in selected:
                 view = build_run_view(run_dir, now)
                 if view:
                     runs.append(view)
@@ -1625,7 +1767,8 @@ def cmd_auto(args) -> int:
     if cmd_ensure(args) != 0:
         return 2
     root = resolve_root(args)
-    project_dir = resolve_project_root(args)
+    session_dir = resolve_project_root(args)
+    project_dir = active_project_dir(args)
     if getattr(args, "reuse", False):
         for run_dir in run_dirs(project_dir):
             view = build_run_view(run_dir)
@@ -1686,7 +1829,11 @@ def cmd_init(args) -> int:
     root = resolve_root(args)
     home = resolve_home(args)
     session_id = resolve_session_id(args)
-    project_dir = root / "sessions" / session_id
+    session_dir = root / "sessions" / session_id
+    project_dir = active_project_dir(args)
+    project_meta = _project_meta(project_dir)
+    local_project_id = project_dir.name
+    local_project_name = str(project_meta.get("name") or local_project_id)
     task_id = slugify(args.run or f"{now_dt().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}", "task")
     task_dir = tasks_path(project_dir) / task_id
     (task_dir / "events").mkdir(parents=True, exist_ok=True)
@@ -1698,6 +1845,8 @@ def cmd_init(args) -> int:
     plan.update({
         "sessionId": session_id,
         "projectId": session_id,
+        "localProjectId": local_project_id,
+        "localProjectName": local_project_name,
         "taskId": task_id,
         "name": task_name,
         "revision": 1,
@@ -1719,9 +1868,10 @@ def cmd_init(args) -> int:
     })
     project_name = args.session_title or session_title(session_id) or f"会话 {session_id[-8:].strip('-') or session_id}"
     if not args.no_register:
+        _write_project_meta(project_dir, local_project_id, local_project_name)
         register_project(home, session_id, name=project_name, color=args.color,
-                         kind="local", path=project_dir, session_id=session_id)
-        register_with_local_hub(project_dir, session_id, project_name)
+                         kind="local", path=session_dir, session_id=session_id)
+        register_with_local_hub(session_dir, session_id, project_name)
     view = render_run(task_dir)
     if args.json_out:
         print(json.dumps({"taskId": task_id, "projectId": session_id,
@@ -1732,6 +1882,7 @@ def cmd_init(args) -> int:
         print(f"name: {task_name}")
         print(f"dir: {task_dir}")
         print(f"project: {session_id} ({project_name})")
+        print(f"local project: {local_project_id} ({local_project_name})")
         print(f"看板: http://127.0.0.1:{DEFAULT_PORT}/r/{session_id}/{task_id}")
     return 0
 
@@ -2149,18 +2300,20 @@ def cmd_revise(args) -> int:
 
 
 def cmd_current(args) -> int:
-    """Return the session's current task pointer and its view."""
-    project_dir = resolve_project_root(args)
+    """Return the current logical project, task pointer and task view."""
+    project_dir = active_project_dir(args)
+    project = _project_meta(project_dir)
     pointer = read_json(project_dir / "current_task.json")
     if not isinstance(pointer, dict) or not pointer.get("taskId"):
         if getattr(args, "json_out", False):
-            print(json.dumps({"task": None}, ensure_ascii=False))
+            print(json.dumps({"task": None, "pointer": None, "project": project}, ensure_ascii=False))
         else:
+            print(f"current project: {project.get('name') or project_dir.name}")
             print("no current task")
         return 0
     run_dir = tasks_path(project_dir) / str(pointer["taskId"])
     view = build_run_view(run_dir)
-    payload = {"task": view, "pointer": pointer}
+    payload = {"task": view, "pointer": pointer, "project": project}
     if getattr(args, "json_out", False):
         print(json.dumps(payload, ensure_ascii=False))
     else:
@@ -2169,6 +2322,96 @@ def cmd_current(args) -> int:
         else:
             print(f"current: {pointer.get('name')} (view missing)")
     return 0
+
+
+def cmd_local_project(args) -> int:
+    """Manage logical projects inside one DSH session."""
+    session_id = resolve_session_id(args)
+    session_dir = resolve_project_root(args)
+    ensure_project_layout(session_dir, session_id)
+    projects = projects_path(session_dir)
+    action = getattr(args, "local_project_cmd", None)
+    current = read_json(session_dir / "current_project.json") or {}
+    if action == "new":
+        base = str(getattr(args, "name", None) or "").strip()
+        project_id = _new_project_id(session_dir, base or "project")
+        project_dir = projects / project_id
+        (project_dir / "tasks").mkdir(parents=True, exist_ok=True)
+        name = base or f"项目 {project_id}"
+        _write_project_meta(project_dir, project_id, name)
+        write_json(session_dir / "current_project.json", {
+            "projectId": project_id, "updatedAt": iso(),
+        })
+        print(f"project: {project_id}")
+        print(f"name: {name}")
+        print(f"dir: {project_dir}")
+        return 0
+    if action in ("use", "rename"):
+        requested = str(getattr(args, "name", None) or "").strip()
+        if not requested:
+            raise SystemExit(f"local-project {action}: --name is required")
+        if action == "use":
+            target = projects / slugify(requested, "project")
+            if not (target.is_dir() and (target / "project.json").exists()):
+                target = None
+                for candidate in list_local_projects(session_dir):
+                    if _project_meta(candidate).get("name") == requested:
+                        target = candidate
+                        break
+            if target is None:
+                raise SystemExit(f"unknown local project: {requested}")
+            write_json(session_dir / "current_project.json", {
+                "projectId": target.name, "updatedAt": iso(),
+            })
+            print(f"current project: {target.name} ({_project_meta(target).get('name')})")
+            return 0
+        target = projects / str(current.get("projectId") or "")
+        if not target.is_dir():
+            raise SystemExit("no current local project")
+        meta = _project_meta(target)
+        meta["name"] = requested
+        write_json(target / "project.json", meta)
+        print(f"renamed project: {target.name} -> {requested}")
+        return 0
+    if action == "list":
+        current_id = str(current.get("projectId") or "")
+        items = []
+        for project_dir in list_local_projects(session_dir):
+            meta = _project_meta(project_dir)
+            tasks = run_dirs(project_dir)
+            running = 0
+            for run_dir in tasks:
+                view = build_run_view(run_dir)
+                if view and view.get("status") == "running":
+                    running += 1
+            items.append({
+                "id": project_dir.name,
+                "name": str(meta.get("name") or project_dir.name),
+                "current": project_dir.name == current_id,
+                "tasks": len(tasks),
+                "running": running,
+            })
+        if getattr(args, "json_out", False):
+            print(json.dumps({"current": current_id, "projects": items}, ensure_ascii=False))
+        else:
+            for item in items:
+                mark = "*" if item["current"] else " "
+                print(f"{mark} {item['name']} [{item['id']}]  {item['tasks']} tasks / {item['running']} running")
+        return 0
+    if action == "tasks":
+        project_dir = active_project_dir(args)
+        if getattr(args, "json_out", False):
+            print(json.dumps({"project": _project_meta(project_dir), "tasks": [
+                build_run_view(p) for p in run_dirs(project_dir) if build_run_view(p)
+            ]}, ensure_ascii=False))
+        else:
+            for run_dir in run_dirs(project_dir):
+                view = build_run_view(run_dir)
+                if not view:
+                    continue
+                print(f"{view['title']} [{view['status']}] {view['progress']['done']}/{view['progress']['total']}")
+        return 0
+    raise SystemExit("usage: local-project new|use|rename|list|tasks")
 
 
 def cmd_close(args) -> int:
@@ -2312,7 +2555,7 @@ def cmd_migrate(args) -> int:
     home = resolve_home(args)
     root = resolve_root(args)
     session_id = resolve_session_id(args)
-    project_dir = root / "sessions" / session_id
+    project_dir = active_project_dir(args)
     task_root = tasks_path(project_dir)
     task_root.mkdir(parents=True, exist_ok=True)
     moved = []
@@ -2600,6 +2843,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_rm.add_argument("task_id")
     p_rm.add_argument("--project", help="project/session id (default: current session)")
     p.set_defaults(func=cmd_task)
+
+    p = sub.add_parser("local-project", parents=[common], help="manage logical projects in this session")
+    p_sub = p.add_subparsers(dest="local_project_cmd", required=True)
+    p_new = p_sub.add_parser("new", parents=[common])
+    p_new.add_argument("--name")
+    p_use = p_sub.add_parser("use", parents=[common])
+    p_use.add_argument("--name", required=True)
+    p_rename = p_sub.add_parser("rename", parents=[common])
+    p_rename.add_argument("--name", required=True)
+    p_sub.add_parser("list", parents=[common])
+    p_sub.add_parser("tasks", parents=[common])
+    for child in p_sub.choices.values():
+        child.set_defaults(func=cmd_local_project)
 
     p = sub.add_parser("project", parents=[common], help="manage registered projects")
     p_sub = p.add_subparsers(dest="project_cmd", required=True)

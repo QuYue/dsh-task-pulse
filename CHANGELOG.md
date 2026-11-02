@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.2.0 — 2026-11-03
+
+- Project 层：Session 下支持多个逻辑 Project；
+- `/tp project new|use|rename|list`；
+- `/tp task *` 作用于 current project；
+- 数据布局：`sessions/<sid>/projects/<projectId>/tasks/...`，旧任务自动迁入 `default`；
+- 看板任务列表显示 project 名称；卡片优先显示 current project 的任务；
+- 新增 `local-project` CLI 与 project 隔离测试。
+
 ## v3.1.0 — 2026-11-03
 
 - `/tp task new|update|auto` 支持 `标题 + 内容`：

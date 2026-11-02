@@ -6,8 +6,9 @@ TaskPulse 把“任务在做什么、做到哪、谁在做”变成 DSH 里随�
 
 ```
 Session（DSH 会话 / 工作区）
-└── Task（一次请求，当前与 Session 一一对应）
-    └── Step（可并行、带进度、可依赖）
+└── Project（一个 session 下可以有多个逻辑项目）
+    └── Task（一次请求）
+        └── Step（可并行、带进度、可依赖）
 ```
 
 文件是唯一事实源：主 agent 维护版本化计划，所有 agent 追加事件；本地 hub（8770）把它们渲染成
@@ -27,6 +28,10 @@ Session（DSH 会话 / 工作区）
 /tp server start
 /tp server stop
 /tp server status
+/tp project new [名称]
+/tp project use <名称>
+/tp project rename "新名称"
+/tp project list
 /tp task new ["标题"] [内容...]
 /tp task update ["标题"] [内容...]
 /tp task auto ["标题"] [内容...]
@@ -96,7 +101,10 @@ rm ~/.dsh/profiles/desktop/node_modules/@quyue/dsh-task-pulse
 ```text
 /task-pulse                     # skill 入口：ensure 8770，模型判断 new/update
 /tp server status               # 原生命令：查看服务与当前任务
-/tp task new "LOT v7 统计" 统计 2024 年各层数量  # 新建任务并唤醒模型
+/tp project new "LOT v7"         # 新建逻辑项目并切换过去
+/tp project use "LOT v7"         # 切换当前项目
+/tp project list                 # 项目列表
+/tp task new "LOT v7 统计" 统计 2024 年各层数量  # 在 current project 新建任务并唤醒模型
 /tp task update 补充要求          # 继续当前任务，不新建
 /tp task auto "当前请求" 内容     # 有 running 当前任务则继续，否则新建
 ```
@@ -122,17 +130,23 @@ $BOARD close --by lead
 ## 数据布局
 
 ```text
-<root>/sessions/<sessionId>/tasks/<taskId>/
-├── plan.json
-├── events/<agent>.jsonl
-├── state.json
-└── BOARD.md
+<root>/sessions/<sessionId>/
+├── current_project.json
+└── projects/<projectId>/
+    ├── project.json
+    ├── current_task.json
+    └── tasks/<taskId>/
+        ├── plan.json
+        ├── events/<agent>.jsonl
+        ├── state.json
+        └── BOARD.md
 ```
 
 默认 root：`<cwd>/.dsh/progress`。  
 共享 hub：`http://127.0.0.1:8770/`；多个项目通过 `POST /api/project/register` 注册到同一个 hub。
 
-旧 live-progress 数据目录结构兼容；迁移后 root 移到工作区 `.dsh/progress`，不再放在 repo 目录里。
+旧 live-progress 数据目录结构兼容：首次使用 project 层时，旧的 `sessions/<sid>/tasks/` 会自动迁移到
+`projects/default/tasks/`。root 固定在工作区 `.dsh/progress`，不再放在 repo 目录里。
 
 ## 开发与 npm 规范
 
@@ -155,10 +169,14 @@ npm pack --dry-run
 - 数据 schema 和 8770 看板 URL 不变；
 - 旧 profile symlink / patch 条目需要移除，重新运行 `./install.sh`。
 
-## 后续
+## Project 层
 
-Project 层（一个 session 多个逻辑 project、project/task 重命名 UI）计划在 v3.1；
-v3.0 先完成单包、官方 provider、`/tp` 命令和迁移。
+- 一个 DSH session 可以包含多个逻辑 project；
+- `/tp project new|use|rename|list` 管理 current project；
+- `/tp task *` 全部作用于 current project；
+- 旧任务自动进入 `default` project；
+- 看板任务列表会显示所属 project 名称；
+- project/task 的网页重命名 UI 还在后续版本。
 
 ## License
 

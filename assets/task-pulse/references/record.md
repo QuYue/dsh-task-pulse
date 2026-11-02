@@ -11,7 +11,8 @@ BOARD="python3 <插件注入的 BOARD 路径>"
 
 ## 0. 上下文（自动带入）
 
-- 项目 = 当前 DSH session（`$DSH_SESSION_ID`），不用你指定 project id。
+- Session = 当前 DSH 工作区；一个 session 下可以有多个逻辑 project。
+- 默认记账到 current project，不用你指定 project id。
 - 任务 = 当前这次请求；任务名自动是 `HH:MM · 计划标题`。
 - 你的步骤 id 由 Lead 分配；失败重试会开新任务。
 

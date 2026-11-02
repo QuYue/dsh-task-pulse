@@ -1390,6 +1390,7 @@
     var titleCell = mk('td');
     var titleLine = mk('div', 'task-title-line');
     titleLine.appendChild(span('task-title', str(run.title) || '未命名运行'));
+    if (str(run.localProjectName)) titleLine.appendChild(mk('span', 'chip', str(run.localProjectName)));
     titleCell.appendChild(titleLine);
     titleCell.appendChild(span('task-sub', str(run.id)));
     tr.appendChild(titleCell);

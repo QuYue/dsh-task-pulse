@@ -81,12 +81,18 @@ class BoardTestCase(unittest.TestCase):
     def session_root(self):
         return self.root / "sessions" / self.session
 
+    def project_root(self):
+        return self.session_root() / "projects" / "default"
+
+    def task_dir(self, run_id):
+        return self.project_root() / "tasks" / run_id
+
     def task_ids(self):
-        base = self.session_root() / "tasks"
+        base = self.project_root() / "tasks"
         return sorted(path.name for path in base.iterdir()) if base.exists() else []
 
     def run_dir(self):
-        dirs = list((self.session_root() / "tasks").glob("*/plan.json"))
+        dirs = list((self.project_root() / "tasks").glob("*/plan.json"))
         self.assertEqual(len(dirs), 1)
         return dirs[0].parent
 
@@ -149,10 +155,10 @@ class BoardTestCase(unittest.TestCase):
         base = 1_700_000_000
         for index, run_id in enumerate(run_ids, start=1):
             stamp = base + index
-            os.utime(self.session_root() / "tasks" / run_id, (stamp, stamp))
+            os.utime(self.task_dir(run_id), (stamp, stamp))
 
     def set_plan_status(self, run_id, status):
-        path = self.session_root() / "tasks" / run_id / "plan.json"
+        path = self.task_dir(run_id) / "plan.json"
         plan = json.loads(path.read_text(encoding="utf-8"))
         plan["status"] = status
         path.write_text(json.dumps(plan), encoding="utf-8")
@@ -324,7 +330,7 @@ class BoardTestCase(unittest.TestCase):
             "projectId": self.session, "taskId": task_id, "confirm": True,
         })
         self.assertTrue(result["ok"])
-        self.assertFalse((self.session_root() / "tasks" / task_id).exists())
+        self.assertFalse(self.task_dir(task_id).exists())
         self.wait_state(lambda data: any(
             p["id"] == self.session and not p["runs"] for p in data["projects"]))
 
@@ -419,7 +425,7 @@ class BoardTestCase(unittest.TestCase):
         plan["createdAt"] = "2026-11-02T09:30:00+08:00"
         legacy.joinpath("plan.json").write_text(json.dumps(plan), encoding="utf-8")
         self.cli("migrate", "--session-title", "迁移会话")
-        migrated = self.session_root() / "tasks" / "old-task" / "plan.json"
+        migrated = self.task_dir("old-task") / "plan.json"
         self.assertTrue(migrated.exists())
         data = json.loads(migrated.read_text())
         self.assertEqual(data["sessionId"], self.session)
@@ -430,7 +436,7 @@ class BoardTestCase(unittest.TestCase):
         view = self.status()
         self.assertEqual(view["sessionId"], self.session)
         self.assertIn(" · ", view["title"])
-        self.assertTrue((self.session_root() / "tasks").exists())
+        self.assertTrue((self.project_root() / "tasks").exists())
 
     def test_report_and_heartbeat_progress(self):
         self.init()
@@ -465,6 +471,31 @@ class BoardTestCase(unittest.TestCase):
         self.assertIn("ARGS=--json,--home,foo", log.read_text())
 
 
+    # -- logical projects ------------------------------------------------
+    def test_local_project_isolates_task_roots(self):
+        self.init()
+        self.cli("local-project", "new", "--name", "Alpha")
+        self.cli("init", "--run", "alpha1", "--plan-file", str(self.plan_path))
+        current = json.loads(self.cli("--json", "current").stdout)
+        self.assertEqual(current["project"]["name"], "Alpha")
+        self.assertTrue((self.session_root() / "projects" / "Alpha" / "tasks" / "alpha1" / "plan.json").exists())
+        default_task = self.task_ids()[0]
+        self.assertTrue(self.task_dir(default_task).exists())
+        self.cli("local-project", "use", "--name", "default")
+        current = json.loads(self.cli("--json", "current").stdout)
+        self.assertEqual(current["project"]["id"], "default")
+        self.assertEqual(len(list((self.project_root() / "tasks").iterdir())), 1)
+        self.assertIn("Alpha", self.cli("local-project", "list").stdout)
+
+    def test_local_project_rename_keeps_id(self):
+        self.cli("local-project", "new", "--name", "Alpha")
+        self.cli("local-project", "rename", "--name", "Beta")
+        listed = self.cli("local-project", "list").stdout
+        self.assertIn("Beta", listed)
+        meta = json.loads((self.session_root() / "projects" / "Alpha" / "project.json").read_text())
+        self.assertEqual(meta["id"], "Alpha")
+        self.assertEqual(meta["name"], "Beta")
+
     # -- prune -----------------------------------------------------------
     def test_prune_dry_run_reports_candidates_without_deleting(self):
         self.init_runs("r1", "r2", "r3")
@@ -486,7 +517,7 @@ class BoardTestCase(unittest.TestCase):
         self.assertEqual(summary["kept"], ["r3"])
         self.assertEqual(sorted(summary["deleted"]), ["r1", "r2"])
         self.assertEqual(self.run_ids_on_disk(), ["r3"])
-        self.assertTrue((self.session_root() / "tasks" / "r3" / "plan.json").exists())
+        self.assertTrue(self.task_dir("r3").joinpath("plan.json").exists())
 
     def test_prune_skips_running_run(self):
         self.init_runs("r1", "r2", "r3")
@@ -498,7 +529,7 @@ class BoardTestCase(unittest.TestCase):
         self.assertEqual(summary["deleted"], ["r2"])
         self.assertEqual(summary["skipped"], ["r1"])
         self.assertEqual(self.run_ids_on_disk(), ["r1", "r3"])
-        self.assertTrue((self.session_root() / "tasks" / "r1" / "plan.json").exists())
+        self.assertTrue(self.task_dir("r1").joinpath("plan.json").exists())
 
     # -- revise/plan-change guards --------------------------------------
     def write_plan(self, plan, name="revised.json"):
