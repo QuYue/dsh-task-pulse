@@ -288,14 +288,19 @@
   .steps th:nth-child(5) { width: 86px; }
   .steps th:nth-child(6) { width: 176px; }
   .steps td { padding: 5px 8px; }
-  .step-id {
-    font-size: 10px; color: var(--dim); background: rgba(255, 255, 255, .04);
-    border-radius: 4px; padding: 0 4px; flex: none;
+  .step-tag {
+    font-size: 10.5px; line-height: 1.6; color: var(--muted);
+    background: rgba(255, 255, 255, .05); border: 1px solid var(--border-soft);
+    border-radius: 4px; padding: 0 5px; flex: none; font-family: var(--mono);
   }
   .step-progress-inline {
     display: inline-flex; align-items: center; gap: 5px;
-    margin-left: 8px; vertical-align: middle; flex: none;
+    margin: 0 0 0 8px; vertical-align: middle; flex: none;
   }
+  .step-progress-block { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+  .step-progress-block .step-progress-track { width: 140px; }
+  .card-head { flex-wrap: wrap; }
+  .progress-toggle { margin-left: auto; }
   .step-progress-track {
     width: 54px; height: 5px; flex: 0 0 auto; border-radius: 999px;
     background: rgba(255, 255, 255, .07); overflow: hidden;
@@ -607,8 +612,23 @@
     polling: false,
     pollFails: 0,
     clientId: makeClientId(),
-    notifIds: new Set()
+    notifIds: new Set(),
+    progressPos: (function () {
+      try {
+        var saved = localStorage.getItem('lp.progressPos');
+        if (saved === 'left' || saved === 'right' || saved === 'above' || saved === 'below') return saved;
+      } catch (e) { /* ignore */ }
+      return 'right';
+    })()
   };
+  var PROGRESS_POS = { right: '右侧', left: '左侧', above: '上方', below: '下方' };
+  var PROGRESS_POS_ORDER = ['right', 'left', 'above', 'below'];
+  function cycleProgressPos() {
+    var index = PROGRESS_POS_ORDER.indexOf(state.progressPos);
+    state.progressPos = PROGRESS_POS_ORDER[(index + 1) % PROGRESS_POS_ORDER.length];
+    try { localStorage.setItem('lp.progressPos', state.progressPos); } catch (e) { /* ignore */ }
+    safeRender();
+  }
   var tickers = [];
   var connEls = [];
   var notifyBtns = [];
@@ -900,11 +920,11 @@
     el.textContent = ms != null ? fmtDur(ms) : '—';
     return el;
   }
-  function stepProgressInline(step) {
+  function stepProgressElement(step, block) {
     var pct = num(step.progress);
     if (pct == null) return null;
     pct = clamp(pct, 0, 100);
-    var box = mk('span', 'step-progress-inline');
+    var box = mk(block ? 'div' : 'span', block ? 'step-progress-block' : 'step-progress-inline');
     var track = mk('div', 'step-progress-track');
     var fill = mk('div', 'step-progress-fill');
     fill.style.width = pct + '%';
@@ -946,8 +966,10 @@
     var tdTitle = mk('td', 'cell-title');
     var titleLine = mk('div', 'step-title-line');
     var id = str(step.id);
-    if (id) titleLine.appendChild(mk('code', 'step-id', id));
-    if (str(step.size)) titleLine.appendChild(mk('span', 'chip size', str(step.size)));
+    var tagBits = [];
+    if (id) tagBits.push(id);
+    if (str(step.size)) tagBits.push(str(step.size));
+    if (tagBits.length) titleLine.appendChild(mk('code', 'step-tag', tagBits.join(' | ')));
     var titleEl = mk('span', 'step-title', str(step.title) || '未命名步骤');
     var acceptance = str(step.acceptance);
     var note = str(step.note);
@@ -956,9 +978,15 @@
     if (note) tooltip.push('备注：' + note);
     if (tooltip.length) titleEl.title = tooltip.join('\n');
     titleLine.appendChild(titleEl);
-    var inlineProgress = stepProgressInline(step);
-    if (inlineProgress) titleLine.appendChild(inlineProgress);
     tdTitle.appendChild(titleLine);
+    var mode = state.progressPos;
+    var progressEl = stepProgressElement(step, mode === 'above' || mode === 'below');
+    if (progressEl) {
+      if (mode === 'left') titleLine.insertBefore(progressEl, titleEl);
+      else if (mode === 'right') titleLine.appendChild(progressEl);
+      else if (mode === 'above') tdTitle.insertBefore(progressEl, titleLine);
+      else tdTitle.appendChild(progressEl);
+    }
     tr.appendChild(tdTitle);
 
     var tdOwner = mk('td', 'cell-owner');
@@ -1564,7 +1592,14 @@
   function stepsCard(run) {
     var card = mk('section', 'card');
     var steps = arr(run.steps);
-    card.appendChild(cardHead('任务进度表', steps.length ? steps.length + ' 个步骤' : ''));
+    var head = cardHead('任务进度表', steps.length ? steps.length + ' 个步骤' : '');
+    var toggle = mk('button', 'btn small progress-toggle',
+                    '进度位置：' + PROGRESS_POS[state.progressPos]);
+    toggle.type = 'button';
+    toggle.title = '点击切换进度条位置（右/左/上/下）';
+    toggle.addEventListener('click', cycleProgressPos);
+    head.appendChild(toggle);
+    card.appendChild(head);
     if (!steps.length) {
       card.appendChild(emptyBox('暂无步骤数据'));
       return card;
