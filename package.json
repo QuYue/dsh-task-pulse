@@ -1,6 +1,6 @@
 {
   "name": "@quyue/dsh-task-pulse",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "TaskPulse: live task progress for DSH — skill provider, /tp command, and composer card.",
   "type": "module",
   "license": "MIT",

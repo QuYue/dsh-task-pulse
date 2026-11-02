@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.1.0 — 2026-11-03
+
+- `/tp task new|update|auto` 支持 `标题 + 内容`：
+  - `"标题" 内容...` → 标题 + 正文；
+  - 没有引号时整段作为内容，标题用默认 `当前请求`；
+- 内容写入占位任务的 `plan.goal`，并带入 followup prompt；
+- 更新 `/tp help`、SKILL.md、README 语法说明。
+
 ## v3.0.2 — 2026-11-03
 
 - 修复 `/tp` 命令使用 Host 进程 cwd 而不是 DSH Session cwd 的问题；

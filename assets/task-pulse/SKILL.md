@@ -67,9 +67,9 @@ $BOARD auto --title "当前请求" --reuse
 /tp server start       # ensure 8770
 /tp server stop        # 停 8770 hub
 /tp server status      # hub / 当前 task
-/tp task new ["标题"]   # 新建占位任务并唤醒模型
-/tp task update ["标题"]# 继续当前 task，不新建
-/tp task auto ["标题"]  # 有 running 当前 task 则 continue，否则 new
+/tp task new ["标题"] [内容...]   # 新建占位任务并唤醒模型
+/tp task update ["标题"] [内容...]  # 继续当前 task，不新建
+/tp task auto ["标题"] [内容...]  # 有 running 当前 task 则 continue，否则 new
 /tp task list          # 当前 session 的任务
 /tp help
 ```

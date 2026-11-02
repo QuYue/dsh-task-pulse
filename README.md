@@ -27,9 +27,9 @@ Session（DSH 会话 / 工作区）
 /tp server start
 /tp server stop
 /tp server status
-/tp task new ["标题"]
-/tp task update ["标题"]
-/tp task auto ["标题"]
+/tp task new ["标题"] [内容...]
+/tp task update ["标题"] [内容...]
+/tp task auto ["标题"] [内容...]
 /tp task list
 /tp help
 ```
@@ -96,9 +96,9 @@ rm ~/.dsh/profiles/desktop/node_modules/@quyue/dsh-task-pulse
 ```text
 /task-pulse                     # skill 入口：ensure 8770，模型判断 new/update
 /tp server status               # 原生命令：查看服务与当前任务
-/tp task new "LOT v7 统计"       # 新建任务并唤醒模型
-/tp task update                 # 继续当前任务，不新建
-/tp task auto "当前请求"          # 有 running 当前任务则继续，否则新建
+/tp task new "LOT v7 统计" 统计 2024 年各层数量  # 新建任务并唤醒模型
+/tp task update 补充要求          # 继续当前任务，不新建
+/tp task auto "当前请求" 内容     # 有 running 当前任务则继续，否则新建
 ```
 
 ### Agent / 脚本

@@ -1637,7 +1637,7 @@ def cmd_auto(args) -> int:
     step_title = str(getattr(args, "step", None) or title).strip() or title
     plan = {
         "title": title,
-        "goal": "",
+        "goal": str(getattr(args, "goal", None) or ""),
         "phases": [{"id": "p1", "title": "执行"}],
         "agents": [{"id": "lead", "name": "lead", "role": "主控"}],
         "steps": [{
@@ -2588,6 +2588,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("auto", parents=[common], help="ensure hub and create/reuse a task")
     p.add_argument("--title")
+    p.add_argument("--goal")
     p.add_argument("--step")
     p.add_argument("--port", type=int, default=DEFAULT_PORT)
     p.add_argument("--reuse", action="store_true")
