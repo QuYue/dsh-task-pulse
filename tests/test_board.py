@@ -488,6 +488,17 @@ class BoardTestCase(unittest.TestCase):
         self.assertEqual(len(list((self.project_root() / "tasks").iterdir())), 1)
         self.assertIn("Alpha", self.cli("local-project", "list").stdout)
 
+    def test_local_project_delete_archives(self):
+        self.cli("local-project", "new", "--name", "Alpha")
+        self.cli("local-project", "new", "--name", "Beta")
+        self.cli("local-project", "delete", "--name", "Alpha")
+        listed = self.cli("local-project", "list").stdout
+        self.assertNotIn("Alpha [Alpha]", listed)
+        self.assertIn("Beta", listed)
+        trash = self.session_root() / ".trash"
+        self.assertTrue(trash.is_dir())
+        self.assertTrue(any("Alpha" in path.name for path in trash.iterdir()))
+
     def test_local_project_rename_keeps_id(self):
         self.cli("local-project", "new", "--name", "Alpha")
         self.cli("local-project", "rename", "--name", "Beta")

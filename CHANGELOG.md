@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.3.1 — 2026-11-03
+
+- 逻辑 project 卡片新增删除按钮（×）；
+- 新增 `/api/local-project/delete` 与 `/tp project delete [名称]`；
+- 删除为归档：project 目录移到 `<session>/.trash/`，不直接抹盘；
+- 删除当前 project 时自动切换到剩余 project；拒绝删除最后一个 project。
+
 ## v3.3.0 — 2026-11-03
 
 - 总览看板改为按**逻辑 project** 展开：每个 project 一张卡片，不再只显示 session；

@@ -361,6 +361,29 @@ def list_local_projects(session_dir: Path) -> list:
     return [p for p in sorted(projects.iterdir()) if p.is_dir() and (p / "project.json").exists()]
 
 
+def delete_local_project(session_dir: Path, local_project_id: str):
+    """Archive one logical project under <session>/.trash and move current pointer away."""
+    session_dir = Path(session_dir)
+    local_project_id = slugify(local_project_id, "project")
+    projects = sorted([p for p in projects_path(session_dir).iterdir() if p.is_dir()]) if projects_path(session_dir).is_dir() else []
+    target = projects_path(session_dir) / local_project_id
+    if not target.is_dir() or not (target / "project.json").exists():
+        return False, f"unknown local project: {local_project_id}"
+    if len(projects) <= 1:
+        return False, "cannot delete the only local project"
+    trash = session_dir / ".trash"
+    trash.mkdir(parents=True, exist_ok=True)
+    dest = trash / f"{local_project_id}-{now_dt().strftime('%Y%m%d-%H%M%S')}"
+    shutil.move(str(target), str(dest))
+    remaining = [p for p in sorted(projects_path(session_dir).iterdir()) if p.is_dir() and (p / "project.json").exists()]
+    pointer = read_json(session_dir / "current_project.json") or {}
+    if pointer.get("projectId") == local_project_id and remaining:
+        write_json(session_dir / "current_project.json", {
+            "projectId": remaining[0].name, "updatedAt": iso(),
+        })
+    return True, None
+
+
 def tasks_path(base: Path) -> Path:
     return Path(base) / "tasks"
 
@@ -1612,6 +1635,24 @@ class Handler(BaseHTTPRequestHandler):
                                     str(payload.get("taskId") or ""))
             self._send_json(200 if ok else 400, {"ok": ok, "error": error})
             return
+        if parsed.path == "/api/local-project/delete":
+            try:
+                payload = json.loads(self._read_body() or b"{}")
+            except Exception:
+                payload = {}
+            if payload.get("confirm") is not True:
+                self._send_json(400, {"ok": False, "error": "confirm is required"})
+                return
+            project_id = str(payload.get("projectId") or "")
+            local_id = str(payload.get("localProjectId") or "")
+            project = load_projects(self.hub.home).get("projects", {}).get(project_id)
+            if project is None:
+                self._send_json(400, {"ok": False, "error": "unknown project"})
+                return
+            base = project_base(self.hub.home, project)
+            ok, error = delete_local_project(base, local_id)
+            self._send_json(200 if ok else 400, {"ok": ok, "error": error})
+            return
         if parsed.path == "/api/project/delete":
             try:
                 payload = json.loads(self._read_body() or b"{}")
@@ -2410,6 +2451,22 @@ def cmd_local_project(args) -> int:
         write_json(target / "project.json", meta)
         print(f"renamed project: {target.name} -> {requested}")
         return 0
+    if action == "delete":
+        requested = str(getattr(args, "name", None) or "").strip()
+        target = projects / slugify(requested, "project") if requested else projects / str(current.get("projectId") or "")
+        if requested and not target.is_dir():
+            target = None
+            for candidate in list_local_projects(session_dir):
+                if _project_meta(candidate).get("name") == requested:
+                    target = candidate
+                    break
+        if target is None or not target.is_dir():
+            raise SystemExit(f"unknown local project: {requested or current.get('projectId')}")
+        ok, error = delete_local_project(session_dir, target.name)
+        if not ok:
+            raise SystemExit(error)
+        print(f"deleted local project: {target.name} (archived under .trash)")
+        return 0
     if action == "list":
         current_id = str(current.get("projectId") or "")
         items = []
@@ -2889,6 +2946,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_use.add_argument("--name", required=True)
     p_rename = p_sub.add_parser("rename", parents=[common])
     p_rename.add_argument("--name", required=True)
+    p_delete = p_sub.add_parser("delete", parents=[common])
+    p_delete.add_argument("--name")
     p_sub.add_parser("list", parents=[common])
     p_sub.add_parser("tasks", parents=[common])
     for child in p_sub.choices.values():

@@ -1553,6 +1553,16 @@
     head.appendChild(mk('span', 'pc-dot'));
     head.appendChild(mk('span', 'pc-name', str(local.name) || lid || '未命名项目'));
     if (local.current) head.appendChild(mk('span', 'chip accent', '当前'));
+    var localDel = mk('button', 'card-del', '×');
+    localDel.type = 'button';
+    localDel.title = '删除项目';
+    localDel.setAttribute('aria-label', '删除项目');
+    localDel.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteLocalProject(session, local);
+    });
+    head.appendChild(localDel);
     card.appendChild(head);
     card.appendChild(span('pc-nodata', str(session.name) || sid));
     var runs = arr(session.runs).filter(function (run) { return str(run.localProjectId) === lid; });
@@ -2267,6 +2277,31 @@
       }).then(function () {
         toast('已删除任务：' + taskName);
         fetchState();
+      }).catch(function (err) {
+        toast('删除失败：' + err.message, 'err');
+      });
+    });
+  }
+  function deleteLocalProject(session, local) {
+    var name = str(local && local.name) || str(local && local.id) || '项目';
+    showDialog({
+      title: '删除项目',
+      body: '「' + name + '」\n\n项目目录会移到该 session 的 .trash 下，不再显示在看板；\n可以从磁盘恢复。',
+      buttons: [
+        { label: '取消', value: null },
+        { label: '删除项目', value: 'delete', kind: 'danger' }
+      ]
+    }).then(function (value) {
+      if (value !== 'delete') return;
+      apiPost('/api/local-project/delete', {
+        projectId: str(session && session.id), localProjectId: str(local && local.id), confirm: true
+      }).then(function () {
+        toast('已删除项目：' + name);
+        if (state.route && str(state.route.localProjectId) === str(local && local.id)) {
+          navigate('/p/' + encodeURIComponent(str(session.id)));
+        } else {
+          fetchState();
+        }
       }).catch(function (err) {
         toast('删除失败：' + err.message, 'err');
       });
