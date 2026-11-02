@@ -103,9 +103,10 @@ window.__ModuleLoader__.load({
 .dsh-lp-time { white-space: nowrap; color: var(--dsw-alias-label-tertiary, #8b98ab); font-variant-numeric: tabular-nums; }
 .dsh-lp-progress { display: flex; align-items: center; gap: 4px; }
 .dsh-lp-track {
-  width: 46px; height: 4px; border-radius: 999px; background: rgba(127,127,127,.22); overflow: hidden; flex: none;
+  display: inline-block; width: 46px; height: 4px; border-radius: 999px;
+  background: rgba(127,127,127,.22); overflow: hidden; flex: none; vertical-align: middle;
 }
-.dsh-lp-fill { height: 100%; border-radius: 999px; background: #4f8cff; }
+.dsh-lp-fill { display: block; height: 100%; border-radius: 999px; background: #4f8cff; }
 .dsh-lp-pct { font-size: 10px; color: var(--dsw-alias-label-secondary, #cfd9e6); font-variant-numeric: tabular-nums; }
 .dsh-lp-note-mark {
   margin-left: 4px; font-size: 10px; color: #ffb454;
