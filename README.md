@@ -73,6 +73,8 @@ $B exec s2 --agent coder --heartbeat 30 --timeout 1800 -- pytest -q   # 长命�
 $B status [--json] [--all]
 $B revise --plan-file plan.v2.json --reason "需求变更"
 $B close --by lead
+$B prune --keep 20 --dry-run          # 预览会被清理的旧 run
+$B prune --keep 20 --yes              # 真正删除（running 的 run 永不删）
 $B serve --port 8770 [--open]
 $B project add --id shop-api --kind ingest      # 远程推送项目，打印 token
 $B push --to http://127.0.0.1:8770 --project-id shop-api
@@ -80,6 +82,9 @@ $B push --to http://127.0.0.1:8770 --project-id shop-api
 
 三层协议：Lead 流程在 `SKILL.md`，子 agent/程序的记账协议在 `references/record.md`，
 `board.py exec` 让长命令和后台 job 自己写 start/心跳/终态，不依赖 agent 记得轮询。
+
+`prune` 只清理已结束的 run：`init` 创建的 run 默认 `status=running`，需要 `close` 后才会进入
+清理范围；先 `--dry-run` 预览，`--yes` 才真正删除，running 的 run 只会被报告为 skipped。
 
 ## 远程与安全
 

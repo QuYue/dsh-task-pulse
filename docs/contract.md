@@ -39,6 +39,7 @@ pushes into `inbox`). `projectId` is an explicit stable slug supplied by the pro
 | `status [--json]` | print current snapshot summary |
 | `render` | rewrite `state.json` + `BOARD.md` |
 | `close [--by lead]` | require terminal steps, mark run completed |
+| `prune --keep N [--dry-run] [--yes]` | delete oldest runs beyond N; running runs are skipped |
 | `serve [--port 8770] [--home H] [--open]` | hub server |
 | `project add/list/remove` | manage ingest projects + tokens |
 | `push --to URL --project-id ID` | remote client: push local run deltas to a hub |

@@ -141,6 +141,7 @@ $BOARD status                 # 人读摘要
 $BOARD --json status          # 机器读（当前快照）
 $BOARD status --all           # 所有 run
 $BOARD render --all           # 重建 state.json / BOARD.md
+$BOARD prune --keep 20 --dry-run   # 预览旧 run；确认后加 --yes（running 不删）
 ```
 
 - 看板“最后更新 N 分钟前”变黄/红：确认对应 agent 是否还在跑；必要时 `board.py status` 复查。

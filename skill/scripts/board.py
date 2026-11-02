@@ -16,6 +16,7 @@ import json
 import os
 import random
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -1765,6 +1766,76 @@ def cmd_render(args) -> int:
     return 0
 
 
+def _prune_keep(value: str) -> int:
+    """argparse type for --keep: integer >= 1."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"invalid --keep value: {value!r} (expected integer >= 1)")
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"--keep must be >= 1 (got {number})")
+    return number
+
+
+def _prune_run_id(run_dir: Path, plan: dict | None) -> str:
+    return str((plan or {}).get("runId") or Path(run_dir).name)
+
+
+def _prune_join(items) -> str:
+    return ", ".join(items) if items else "—"
+
+
+def _remove_run_dir(run_dir: Path) -> None:
+    run_dir = Path(run_dir)
+    if run_dir.is_symlink():
+        run_dir.unlink()
+    else:
+        shutil.rmtree(run_dir)
+
+
+def cmd_prune(args) -> int:
+    """Delete old run directories, keeping the newest N.
+
+    Candidates are runs past the keep window; runs whose plan.status is
+    ``running`` are never deleted. Deletion only happens with ``--yes`` and
+    never under ``--dry-run``.
+    """
+    root = resolve_root(args)
+    dry_run = bool(getattr(args, "dry_run", False))
+    confirmed = bool(getattr(args, "yes", False))
+    dirs = run_dirs(root)
+    kept = [run_dir.name for run_dir in dirs[:args.keep]]
+    deleted, skipped, removable = [], [], []
+    for run_dir in dirs[args.keep:]:
+        plan = load_plan(run_dir) or {}
+        run_id = _prune_run_id(run_dir, plan)
+        if str(plan.get("status") or "") == "running":
+            skipped.append(run_id)
+        else:
+            deleted.append(run_id)
+            removable.append(run_dir)
+
+    if confirmed and not dry_run:
+        for run_dir in removable:
+            _remove_run_dir(run_dir)
+
+    if getattr(args, "json_out", False):
+        print(json.dumps({"kept": kept, "deleted": deleted, "skipped": skipped},
+                         ensure_ascii=False, indent=2))
+        return 0
+
+    print(f"prune: {root}")
+    print(f"keep {len(kept)}: {_prune_join(kept)}")
+    label = "deleted" if (confirmed and not dry_run) else "would delete"
+    print(f"{label} {len(deleted)}: {_prune_join(deleted)}")
+    print(f"skipped (running) {len(skipped)}: {_prune_join(skipped)}")
+    if dry_run:
+        print("dry-run: nothing was deleted")
+    elif not confirmed:
+        print("nothing was deleted; re-run with --yes to delete")
+    return 0
+
+
 def cmd_project(args) -> int:
     home = resolve_home(args)
     if args.project_cmd == "list":
@@ -1957,6 +2028,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--run")
     p.add_argument("--all", action="store_true")
     p.set_defaults(func=cmd_render)
+
+    p = sub.add_parser("prune", parents=[common],
+                       help="delete old run dirs, keeping the newest N")
+    p.add_argument("--keep", type=_prune_keep, default=20,
+                   help="number of newest runs to keep (default 20, integer >= 1)")
+    p.add_argument("--dry-run", dest="dry_run", action="store_true",
+                   help="report what would be deleted, delete nothing")
+    p.add_argument("--yes", dest="yes", action="store_true",
+                   help="actually delete the old runs")
+    p.set_defaults(func=cmd_prune)
 
     p = sub.add_parser("serve", parents=[common], help="start the hub server")
     p.add_argument("--port", type=int, default=DEFAULT_PORT)

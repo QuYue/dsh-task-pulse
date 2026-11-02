@@ -124,6 +124,26 @@ class BoardTestCase(unittest.TestCase):
         with urllib.request.urlopen(request, timeout=5) as response:
             return json.loads(response.read())
 
+    # -- prune helpers ---------------------------------------------------
+    def init_runs(self, *run_ids):
+        """Create one run per id; later ids get newer directory mtimes."""
+        for run_id in run_ids:
+            self.cli("init", "--project-id", "demo", "--run", run_id,
+                     "--plan-file", str(self.plan_path))
+        base = 1_700_000_000
+        for index, run_id in enumerate(run_ids, start=1):
+            stamp = base + index
+            os.utime(self.root / "runs" / run_id, (stamp, stamp))
+
+    def set_plan_status(self, run_id, status):
+        path = self.root / "runs" / run_id / "plan.json"
+        plan = json.loads(path.read_text(encoding="utf-8"))
+        plan["status"] = status
+        path.write_text(json.dumps(plan), encoding="utf-8")
+
+    def run_ids_on_disk(self):
+        return sorted(path.name for path in (self.root / "runs").iterdir())
+
     # -- tests -----------------------------------------------------------
     def test_init_registers_project_and_writes_artifacts(self):
         self.init()
@@ -319,6 +339,49 @@ class BoardTestCase(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("ARGS=--json,--home,foo", log.read_text())
+
+
+    # -- prune -----------------------------------------------------------
+    def test_prune_dry_run_reports_candidates_without_deleting(self):
+        self.init_runs("r1", "r2", "r3")
+        self.set_plan_status("r1", "completed")
+        self.set_plan_status("r2", "completed")
+        result = self.cli("--json", "prune", "--keep", "1", "--dry-run")
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary["kept"], ["r3"])
+        self.assertEqual(sorted(summary["deleted"]), ["r1", "r2"])
+        self.assertEqual(summary["skipped"], [])
+        self.assertEqual(self.run_ids_on_disk(), ["r1", "r2", "r3"])
+
+    def test_prune_keep_yes_deletes_old_runs(self):
+        self.init_runs("r1", "r2", "r3")
+        self.set_plan_status("r1", "completed")
+        self.set_plan_status("r2", "completed")
+        result = self.cli("--json", "prune", "--keep", "1", "--yes")
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary["kept"], ["r3"])
+        self.assertEqual(sorted(summary["deleted"]), ["r1", "r2"])
+        self.assertEqual(self.run_ids_on_disk(), ["r3"])
+        self.assertTrue((self.root / "runs" / "r3" / "plan.json").exists())
+
+    def test_prune_skips_running_run(self):
+        self.init_runs("r1", "r2", "r3")
+        self.set_plan_status("r1", "running")
+        self.set_plan_status("r2", "completed")
+        result = self.cli("--json", "prune", "--keep", "1", "--yes")
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary["kept"], ["r3"])
+        self.assertEqual(summary["deleted"], ["r2"])
+        self.assertEqual(summary["skipped"], ["r1"])
+        self.assertEqual(self.run_ids_on_disk(), ["r1", "r3"])
+        self.assertTrue((self.root / "runs" / "r1" / "plan.json").exists())
+
+    def test_prune_rejects_keep_zero(self):
+        self.init_runs("r1")
+        result = self.cli("prune", "--keep", "0", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--keep", result.stderr)
+        self.assertEqual(self.run_ids_on_disk(), ["r1"])
 
 
 if __name__ == "__main__":
