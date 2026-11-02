@@ -274,7 +274,7 @@
   /* ---------- step table ---------- */
   .steps-wrap { overflow-x: auto; margin: 2px -4px 0; }
   table.steps {
-    width: 100%; min-width: 820px; table-layout: fixed;
+    width: 100%; min-width: 1040px; table-layout: fixed;
     border-collapse: separate; border-spacing: 0; font-size: 12px;
   }
   .steps thead th {
@@ -284,10 +284,13 @@
   .steps th:nth-child(1) { width: 88px; }
   .steps th:nth-child(2) { width: auto; }
   .steps th:nth-child(3) { width: 96px; }
-  .steps th:nth-child(4) { width: 60px; }
-  .steps th:nth-child(5) { width: 86px; }
-  .steps th:nth-child(6) { width: 176px; }
+  .steps th:nth-child(4) { width: 92px; }
+  .steps th:nth-child(5) { width: 92px; }
+  .steps th:nth-child(6) { width: 58px; }
+  .steps th:nth-child(7) { width: 86px; }
+  .steps th:nth-child(8) { width: 168px; }
   .steps td { padding: 5px 8px; }
+  .cell-start, .cell-end { font-size: 11px; color: var(--muted); white-space: nowrap; }
   .step-tag {
     font-size: 10.5px; line-height: 1.6; color: var(--muted);
     background: rgba(255, 255, 255, .05); border: 1px solid var(--border-soft);
@@ -507,6 +510,32 @@
   function fmtClock(ts) {
     var d = new Date(ts);
     return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+  }
+  var BEIJING_TZ = 'Asia/Shanghai';
+  var beijingTimeFmt = null, beijingFullFmt = null;
+  try {
+    beijingTimeFmt = new Intl.DateTimeFormat('en-GB', {
+      timeZone: BEIJING_TZ, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    });
+    beijingFullFmt = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: BEIJING_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    });
+  } catch (e) { /* Intl unavailable */ }
+  function fmtBeijing(ms) {
+    if (ms == null) return '—';
+    try { if (beijingTimeFmt) return beijingTimeFmt.format(new Date(ms)); } catch (e) { /* ignore */ }
+    return fmtClock(ms);
+  }
+  function beijingFull(ms) {
+    if (ms == null) return '';
+    try { if (beijingFullFmt) return beijingFullFmt.format(new Date(ms)) + '（北京时间）'; } catch (e) { /* ignore */ }
+    return new Date(ms).toString();
+  }
+  function timeCell(ms) {
+    var el = mk('span', 'mono time-val', fmtBeijing(ms));
+    if (ms != null) el.title = beijingFull(ms);
+    return el;
   }
   function fmtDateTime(ts) {
     if (ts == null) return '';
@@ -938,7 +967,7 @@
   function phaseRow(phase, steps) {
     var tr = mk('tr', 'phase-row');
     var td = mk('td');
-    td.colSpan = 6;
+    td.colSpan = 8;
     var box = mk('div', 'phase-head');
     var status = str(phase && phase.status);
     box.appendChild(mk('span', 'dot ph-' + (STEP_STATUS[status] ? status : 'pending')));
@@ -994,6 +1023,14 @@
     if (executed) tdOwner.appendChild(ownerCell(step.owner, agents));
     else tdOwner.appendChild(span('dim', '—'));
     tr.appendChild(tdOwner);
+
+    var tdStart = mk('td', 'cell-start');
+    tdStart.appendChild(timeCell(parseTime(step.startedAt)));
+    tr.appendChild(tdStart);
+
+    var tdEnd = mk('td', 'cell-end');
+    tdEnd.appendChild(timeCell(parseTime(step.endedAt)));
+    tr.appendChild(tdEnd);
 
     var tdElapsed = mk('td', 'cell-elapsed');
     tdElapsed.appendChild(elapsedCell(step));
@@ -1592,7 +1629,7 @@
   function stepsCard(run) {
     var card = mk('section', 'card');
     var steps = arr(run.steps);
-    var head = cardHead('任务进度表', steps.length ? steps.length + ' 个步骤' : '');
+    var head = cardHead('任务进度表', steps.length ? steps.length + ' 个步骤 · 北京时间' : '');
     var toggle = mk('button', 'btn small progress-toggle',
                     '进度位置：' + PROGRESS_POS[state.progressPos]);
     toggle.type = 'button';
@@ -1608,7 +1645,7 @@
     var table = mk('table', 'steps');
     var thead = mk('thead');
     var htr = mk('tr');
-    var cols = ['状态', '步骤', '执行者', '耗时', '依赖阻塞', '证据'];
+    var cols = ['状态', '步骤', '执行者', '开始时间', '结束时间', '耗时', '依赖阻塞', '证据'];
     for (var i = 0; i < cols.length; i++) {
       var th = mk('th');
       th.scope = 'col';
