@@ -1,41 +1,46 @@
 #!/usr/bin/env bash
-# Install the live-progress skill for DSH discovery.
-#
-#   ./install.sh                     # project-level: <cwd>/.dsh/skills/live-progress
-#   ./install.sh --global            # user-level:    ~/.dsh/skills/live-progress
-#   ./install.sh --global --agents   # + append the AGENTS.md snippet to <cwd>/AGENTS.md
+# Install TaskPulse into a DSH profile as a single scoped plugin package.
+# Desktop profiles are exclusively managed by the Electron app, so `dsh plugin add`
+# is not allowed; this installs a local symlink + loader patch instead.
+# Usage: ./install.sh [profile]   (default: desktop)
 set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROFILE="${1:-${DSH_PROFILE:-desktop}}"
+PROFILE_DIR="$HOME/.dsh/profiles/$PROFILE"
+NAME="@quyue/dsh-task-pulse"
+PKG_PATH="$PROFILE_DIR/node_modules/@quyue/dsh-task-pulse"
+PATCH="$PROFILE_DIR/cordis.patch.yml"
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_DIR="$REPO_DIR/skill"
-TARGET="$PWD/.dsh/skills/live-progress"
+if [ ! -f "$ROOT/lib/client.js" ] || [ ! -f "$ROOT/lib/index.js" ]; then
+  echo "missing $ROOT/lib/*.js" >&2
+  exit 1
+fi
+mkdir -p "$(dirname "$PKG_PATH")" "$PROFILE_DIR"
+ln -sfn "$ROOT" "$PKG_PATH"
 
-if [[ "${1:-}" == "--global" ]]; then
-  TARGET="$HOME/.dsh/skills/live-progress"
-  shift || true
+if [ ! -f "$PATCH" ]; then
+  printf '%s\n' '# User patch layer for this profile.' > "$PATCH"
+fi
+if ! grep -q 'task-pulse' "$PATCH"; then
+  cat >> "$PATCH" <<YAML
+
+# TaskPulse
+- insert:
+    - id: task-pulse
+      name: "$NAME"
+YAML
+  echo "Added loader entry to $PATCH"
+else
+  echo "Loader entry already present in $PATCH"
 fi
 
-mkdir -p "$(dirname "$TARGET")"
-ln -sfn "$SKILL_DIR" "$TARGET"
-echo "linked: $TARGET -> $SKILL_DIR"
-
-if [[ "${1:-}" == "--agents" ]]; then
-  AGENTS_FILE="$PWD/AGENTS.md"
-  if [[ -f "$AGENTS_FILE" ]] && grep -q "live-progress" "$AGENTS_FILE"; then
-    echo "AGENTS.md already mentions live-progress; skipped"
-  else
-    {
-      echo
-      cat "$REPO_DIR/docs/AGENTS.snippet.md"
-    } >> "$AGENTS_FILE"
-    echo "appended snippet to $AGENTS_FILE"
-  fi
-fi
+# Verify Node can resolve the package from the profile.
+(cd "$PROFILE_DIR" && node -e "import('$NAME').then(()=>console.log('resolved $NAME'))")
 
 cat <<'EOF'
 
-Verify with:
-  python3 "$TARGET/scripts/board.py" --version
-Start the board:
-  python3 "$TARGET/scripts/board.py" serve --port 8770
+Installed. Restart DSH Desktop to load the plugin.
+Then use:
+  /task-pulse        skill
+  /tp server status  native command
 EOF

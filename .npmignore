@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+tests/
+demo/
+docs/
+dev/
+.github/
+.gitignore

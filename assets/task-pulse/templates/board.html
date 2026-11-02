@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
-<title>live-progress · 任务进度看板</title>
+<title>TaskPulse · 任务进度看板</title>
 <style>
   :root {
     --bg: #0b0f16;
@@ -494,7 +494,7 @@
 'use strict';
 (function () {
   /* ============================================================
-   * live-progress board · single-file dashboard
+   * TaskPulse board · single-file dashboard
    * vanilla JS, no external resources, same-origin /api/* only
    * ============================================================ */
 
@@ -1181,7 +1181,7 @@
     brand.href = '/';
     brand.setAttribute('data-nav', '');
     brand.appendChild(mk('span', 'brand-mark'));
-    brand.appendChild(mk('span', 'brand-name', 'live-progress'));
+    brand.appendChild(mk('span', 'brand-name', 'TaskPulse'));
     brand.appendChild(mk('small', 'brand-sub', '任务进度看板'));
     bar.appendChild(brand);
 
@@ -1950,21 +1950,21 @@
     try { return window.scrollY || window.pageYOffset || 0; } catch (e) { return 0; }
   }
   function updateTitle(route) {
-    var title = 'live-progress · 任务进度看板';
+    var title = 'TaskPulse · 任务进度看板';
     try {
       if (route.name === 'overview') {
-        title = '总览 · live-progress';
+        title = '总览 · TaskPulse';
       } else if (route.name === 'detail') {
         var p = findProject(route.projectId);
         var r = p ? (route.runId ? findRun(p, route.runId) : latestRun(p)) : null;
-        if (r) title = (str(r.title) || '运行详情') + ' · live-progress';
-        else if (p) title = (str(p.name) || '项目') + ' · live-progress';
-        else title = '未找到 · live-progress';
+        if (r) title = (str(r.title) || '运行详情') + ' · TaskPulse';
+        else if (p) title = (str(p.name) || '项目') + ' · TaskPulse';
+        else title = '未找到 · TaskPulse';
       } else if (route.name === 'project') {
         var pp = findProject(route.projectId);
-        title = pp ? ((str(pp.name) || '项目') + ' · 任务列表 · live-progress') : '未找到 · live-progress';
+        title = pp ? ((str(pp.name) || '项目') + ' · 任务列表 · TaskPulse') : '未找到 · TaskPulse';
       } else {
-        title = '页面不存在 · live-progress';
+        title = '页面不存在 · TaskPulse';
       }
     } catch (e) { /* ignore */ }
     try { document.title = title; } catch (e2) { /* ignore */ }
@@ -2014,7 +2014,7 @@
   function safeRender() {
     try { render(); } catch (e) {
       try {
-        if (typeof console !== 'undefined' && console.error) console.error('live-progress render failed', e);
+        if (typeof console !== 'undefined' && console.error) console.error('TaskPulse render failed', e);
       } catch (e2) { /* ignore */ }
     }
   }

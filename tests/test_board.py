@@ -1,4 +1,4 @@
-"""Black-box tests for live-progress board (stdlib unittest, no third-party deps)."""
+"""Black-box tests for TaskPulse board (stdlib unittest, no third-party deps)."""
 import json
 import os
 import socket
@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-BOARD = REPO / "skill" / "scripts" / "board.py"
+BOARD = REPO / "assets" / "task-pulse" / "scripts" / "board.py"
 PY = sys.executable
 
 BASE_PLAN = {
@@ -585,6 +585,17 @@ class BoardTestCase(unittest.TestCase):
         result = self.cli("start", "s3", check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("superseded", result.stderr)
+
+    def test_current_task_pointer(self):
+        self.init()
+        current = json.loads(self.cli("--json", "current").stdout)
+        self.assertEqual(current["task"]["id"], self.run_dir().name)
+        for step in ("s1", "s2", "s3", "s4"):
+            self.cli("start", step, "--agent", "lead")
+            self.cli("done", step, "--agent", "lead")
+        self.cli("close", "--by", "lead")
+        current = json.loads(self.cli("--json", "current").stdout)
+        self.assertIsNone(current["task"])
 
     def test_prune_rejects_keep_zero(self):
         self.init_runs("r1")

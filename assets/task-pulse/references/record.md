@@ -5,8 +5,8 @@
 你只需要 3 条命令 + 1 个包装器。**不要修改 `plan.json`，不要管看板怎么渲染。**
 
 ```bash
-BOARD="python3 .dsh/skills/live-progress/scripts/board.py"
-# 若 skill 装在别处，换成实际路径；本文件所在目录的上一级就是 skill 根。
+BOARD="python3 <插件注入的 BOARD 路径>"
+# BOARD / ASSETS 的绝对路径由 TaskPulse skill provider 注入；也可以指向仓库 assets/task-pulse/scripts/board.py。
 ```
 
 ## 0. 上下文（自动带入）
@@ -68,7 +68,7 @@ $BOARD report s3 --percent 45 --agent coder --current "读取数据 45%"
 ## 5. spawn 模板（Lead 复制给子 agent）
 
 ```
-本任务使用 live-progress 记账。你的步骤是 <stepId>（owner=<agentName>）。
+本任务使用 task-pulse 记账。你的步骤是 <stepId>（owner=<agentName>）。
 开始：$BOARD start <stepId> --agent <agentName>
 长命令/后台任务：$BOARD exec <stepId> --agent <agentName> --heartbeat 30 -- <command...>
 短步骤心跳：$BOARD heartbeat --agent <agentName> --step <stepId> --current "<在做什么>"

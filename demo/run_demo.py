@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""live-progress demo (v3 model: project = session, task = request).
+"""TaskPulse demo (v3 model: project = session, task = request).
 
 Two DSH sessions are simulated:
   * demo-session        — two tasks in the same session (wordcount JSON/CSV, fix README)
@@ -26,7 +26,7 @@ import webbrowser
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-BOARD = REPO / "skill" / "scripts" / "board.py"
+BOARD = REPO / "assets" / "task-pulse" / "scripts" / "board.py"
 DEMO_DIR = Path(__file__).resolve().parent
 DEMO_A = DEMO_DIR / "demo_a"
 PROGRESS_ROOT = DEMO_A / ".dsh" / "progress"
@@ -320,7 +320,7 @@ def scenario_remote(args, port: int) -> None:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="live-progress demo")
+    parser = argparse.ArgumentParser(description="TaskPulse demo")
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--open", action="store_true")
     parser.add_argument("--fast", action="store_true")

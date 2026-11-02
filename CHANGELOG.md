@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.0.0 — 2026-11-03
+
+TaskPulse 单包重构。
+
+- 包名：`@quyue/dsh-task-pulse`；
+- 单包：根目录同时包含 Host 插件、skill provider、`/tp` 命令、client 卡片和 board assets；
+- skill：`task-pulse`，使用官方 `ctx.skills.registerProvider()` bundled provider 形态；
+- 命令：`/tp`，原生命令；不再使用 `/lp` 过渡；
+- 结构：`skill/` + `plugin/` → `assets/task-pulse/` + `lib/` + 根 `package.json`；
+- npm 规范：`files`、`exports`、`peerDependencies`、`publishConfig`、LICENSE；
+- 数据 root 迁出 repo，固定在工作区 `.dsh/progress`；共享 hub 8770；
+- 卡片 bundle id / slot id / localStorage 前缀改为 TaskPulse；
+- 新增 `board.py current` 与 `/api/shutdown`，支持 `/tp task update|auto` 与 `/tp server stop`；
+- 测试与文档更新为 TaskPulse。
+
 ## v2.0.3 — 2026-11-03
 
 最终样式与文档。

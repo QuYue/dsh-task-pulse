@@ -1,8 +1,8 @@
-# live-progress contract v1
+# TaskPulse contract
 
 Single source of truth = files. The hub server is a read-only viewer plus an ingest endpoint.
-This file is the interface between the backend (`skill/scripts/board.py`) and the page
-(`skill/templates/board.html`).
+This file is the interface between the backend (`assets/task-pulse/scripts/board.py`) and the page
+(`assets/task-pulse/templates/board.html`).
 
 ## Layout
 
@@ -27,7 +27,7 @@ the path directly) or `ingest` (remote pushes into `inbox`).
 
 ## CLI (agent-facing)
 
-`python3 skill/scripts/board.py <cmd> ...`
+`python3 assets/task-pulse/scripts/board.py <cmd> ...`
 
 | command | purpose |
 |---|---|

@@ -1,10 +1,10 @@
 ---
-name: live-progress
+name: task-pulse
 description: 多步任务实时进度看板。文件是唯一事实源：主 agent 维护版本化计划，子 agent 与后台任务追加事件，本地看板网页以泳道 + 步骤表实时显示。适用于需要用户实时监管、有并行 agent / 后台任务 / 远程执行的多步任务。
 whenToUse: 任务预计超过约 10 分钟，或会派生子 agent、后台任务，或用户要求“实时进度 / 看板 / 不要只文字汇报”。3 步以内的小任务不必使用。
 ---
 
-# live-progress
+# TaskPulse
 
 ## 心智模型
 
@@ -31,13 +31,11 @@ whenToUse: 任务预计超过约 10 分钟，或会派生子 agent、后台任�
 
 ## 路径与变量
 
-skill 目录通常为以下之一（存在即用）。主协议在本文件，子 agent 的记账协议在 `references/record.md`：
-
-- `.dsh/skills/live-progress`
-- `~/.dsh/skills/live-progress`
+主协议在本文件，子 agent 的记账协议在 `references/record.md`。
+插件会在加载正文末尾注入 `BOARD` 与 `ASSETS` 的绝对路径。
 
 ```bash
-BOARD="python3 .dsh/skills/live-progress/scripts/board.py"
+BOARD="python3 <插件注入的 BOARD 路径>"
 ```
 
 数据位置：
@@ -46,7 +44,7 @@ BOARD="python3 .dsh/skills/live-progress/scripts/board.py"
 - 本地 hub：`~/.dsh/progress`；沙箱内不可写时自动回退到 `<cwd>/.dsh/progress/hub`。
   多命令务必显式传同一个 `--home`，或设置环境变量 `DSH_PROGRESS_HOME`。
 
-## 一键启动（用户 /live-progress 时）
+## 一键启动（用户 /task-pulse 时）
 
 先确保 hub 在跑，并为当前请求建一个任务（这样卡片立即可见）：
 
@@ -60,6 +58,23 @@ $BOARD auto --title "当前请求" --reuse
 `auto` 先建一个只有一步的占位任务，随后用 `revise` 换成真实计划。
 所有项目共用一个 hub（8770）：`ensure` 已运行时不会新起服务；`init` 会把当前项目注册到该 hub。
 如果用户只是要求“打开看板”，执行 `ensure` 即可。
+
+## 原生 `/tp` 命令（用户可直接输入）
+
+插件同时注册了一个 DSH 原生命令 `/tp`；它不经过模型，直接执行：
+
+```text
+/tp server start       # ensure 8770
+/tp server stop        # 停 8770 hub
+/tp server status      # hub / 当前 task
+/tp task new ["标题"]   # 新建占位任务并唤醒模型
+/tp task update ["标题"]# 继续当前 task，不新建
+/tp task auto ["标题"]  # 有 running 当前 task 则 continue，否则 new
+/tp task list          # 当前 session 的任务
+/tp help
+```
+
+`/task-pulse` 是 skill 入口（模型判断）；`/tp` 是确定性命令。
 
 ## 启动任务（主 agent，任务分配后的第一个动作）
 
@@ -111,7 +126,7 @@ $BOARD auto --title "当前请求" --reuse
 
 ## 继续已有任务（强制）
 
-`/live-progress` 只加载本文件，不会自动创建任务或写事件。继续一个已存在的任务时：
+`/task-pulse` 只加载本文件，不会自动创建任务或写事件。继续一个已存在的任务时：
 
 1. 先 `$BOARD status`，确认当前进行中的步骤；
 2. 开始任何工作前 `$BOARD start <step> --agent ...`；
@@ -165,7 +180,7 @@ $BOARD report s5 --percent 60 --agent bg-1 --current "读取数据 60%"
    派生子 agent 时，把下面这段放进 spawn prompt，并给出它的 step id：
 
    ```
-   本任务使用 live-progress 记账。你的步骤是 <stepId>（owner=<agentName>）。
+   本任务使用 task-pulse 记账。你的步骤是 <stepId>（owner=<agentName>）。
    开始：$BOARD start <stepId> --agent <agentName>
    长命令/后台任务：$BOARD exec <stepId> --agent <agentName> --heartbeat 30 -- <command...>
    步骤进度：$BOARD report <stepId> --percent <0-100> --agent <agentName> --current "<在做什么>"

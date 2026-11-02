@@ -3,7 +3,7 @@ const fs = require('fs')
 const vm = require('vm')
 const path = require('path')
 
-const file = path.join(__dirname, 'lib', 'client.js')
+const file = path.join(__dirname, '..', 'lib', 'client.js')
 const captured = { id: null, spec: null, component: null }
 const sandbox = {
   console,
@@ -32,7 +32,7 @@ function assert(condition, message) {
   console.log('ok -', message)
 }
 
-assert(captured.id === 'dsh-live-progress-card', 'bundle id')
+assert(captured.id === '@quyue/dsh-task-pulse', 'bundle id')
 assert(typeof captured.exports.apply === 'function', 'exports.apply is a function')
 assert(Array.isArray(captured.exports.inject), 'exports.inject is an array')
 
@@ -43,7 +43,7 @@ captured.exports.apply({
   },
 })
 assert(captured.spec.name === 'conversation.input.dock', 'registers on composer input dock')
-assert(captured.spec.id === 'live-progress-card', 'slot entry id')
+assert(captured.spec.id === 'task-pulse-card', 'slot entry id')
 assert(captured.spec.order === 1, 'slot order after native todo (0)')
 assert(typeof captured.component === 'function', 'slot component is a function')
 

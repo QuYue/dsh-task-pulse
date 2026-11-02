@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""live-progress board v1 — file-first real-time task progress for DSH agents.
+"""TaskPulse board — file-first real-time task progress for DSH agents.
 
 Design: files are the single source of truth. Agents append events; the Lead owns the
 versioned plan; the hub server is a read-only viewer plus a token-protected ingest
@@ -39,7 +39,7 @@ try:  # POSIX only; the skill targets macOS/Linux
 except Exception:  # pragma: no cover
     fcntl = None
 
-VERSION = "1.0.0"
+VERSION = "3.0.0"
 SCHEMA = 1
 DEFAULT_PORT = 8770
 DEFAULT_HOST = "127.0.0.1"
@@ -1288,7 +1288,7 @@ class Hub:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = f"live-progress/{VERSION}"
+    server_version = f"task-pulse/{VERSION}"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *args):  # keep the console quiet
@@ -1391,6 +1391,11 @@ class Handler(BaseHTTPRequestHandler):
             status, obj = self.hub.ingest(payload)
             self._send_json(status, obj)
             return
+        if parsed.path == "/api/shutdown":
+            self._send_json(200, {"ok": True})
+            self.server.hub.stop.set()
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            return
         if parsed.path == "/api/project/register":
             try:
                 payload = json.loads(self._read_body() or b"{}")
@@ -1444,7 +1449,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body = self.hub.template.read_bytes()
         except OSError:
-            body = ("<!doctype html><meta charset=utf-8><h1>live-progress</h1>"
+            body = ("<!doctype html><meta charset=utf-8><h1>TaskPulse</h1>"
                     "<p>模板缺失：{}</p>".format(self.hub.template)).encode("utf-8")
         self._send(200, body, "text/html; charset=utf-8")
 
@@ -1513,7 +1518,7 @@ def cmd_serve(args) -> int:
         "url": url, "host": host, "port": port, "pid": os.getpid(),
         "startedAt": iso(), "version": VERSION,
     })
-    print(f"live-progress board: {url}")
+    print(f"TaskPulse board: {url}")
     print(f"home: {home}")
     print(f"template: {template}")
     sys.stdout.flush()
@@ -1638,7 +1643,7 @@ def cmd_auto(args) -> int:
             "acceptance": "等待细化计划",
         }],
     }
-    fd, plan_path = tempfile.mkstemp(prefix="live-progress-auto-", suffix=".json")
+    fd, plan_path = tempfile.mkstemp(prefix="task-pulse-auto-", suffix=".json")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(plan, handle, ensure_ascii=False)
@@ -1706,6 +1711,9 @@ def cmd_init(args) -> int:
     })
     write_json(task_dir / "plan.json", plan)
     append_event(task_dir, {"agent": "lead", "type": "init", "note": "计划 v1"})
+    write_json(project_dir / "current_task.json", {
+        "taskId": task_id, "name": task_name, "updatedAt": iso(),
+    })
     project_name = args.session_title or session_title(session_id) or f"会话 {session_id[-8:].strip('-') or session_id}"
     if not args.no_register:
         register_project(home, session_id, name=project_name, color=args.color,
@@ -1904,7 +1912,7 @@ def cmd_exec(args) -> int:
         run_dir / "exec" / f"{step['id']}-{started.strftime('%H%M%S')}.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "w", encoding="utf-8") as log:
-        log.write(f"# live-progress exec\n# step: {step['id']} ({step['title']})\n"
+        log.write(f"# TaskPulse exec\n# step: {step['id']} ({step['title']})\n"
                   f"# agent: {agent}\n# started: {started_ts}\n# command: {' '.join(command)}\n\n")
 
     append_event(run_dir, {
@@ -2038,7 +2046,7 @@ def cmd_exec(args) -> int:
         code = int(exit_code) if isinstance(exit_code, int) and exit_code > 0 else 1
 
     maybe_render(run_dir, args)
-    print(f"[live-progress] step {step['id']} {status_line}; log: {log_path}")
+    print(f"[task-pulse] step {step['id']} {status_line}; log: {log_path}")
     return code
 
 
@@ -2137,9 +2145,38 @@ def cmd_revise(args) -> int:
     return 0
 
 
+def cmd_current(args) -> int:
+    """Return the session's current task pointer and its view."""
+    project_dir = resolve_project_root(args)
+    pointer = read_json(project_dir / "current_task.json")
+    if not isinstance(pointer, dict) or not pointer.get("taskId"):
+        if getattr(args, "json_out", False):
+            print(json.dumps({"task": None}, ensure_ascii=False))
+        else:
+            print("no current task")
+        return 0
+    run_dir = tasks_path(project_dir) / str(pointer["taskId"])
+    view = build_run_view(run_dir)
+    payload = {"task": view, "pointer": pointer}
+    if getattr(args, "json_out", False):
+        print(json.dumps(payload, ensure_ascii=False))
+    else:
+        if view:
+            print(f"current: {view['title']} [{view['status']}] {view['progress']['done']}/{view['progress']['total']}")
+        else:
+            print(f"current: {pointer.get('name')} (view missing)")
+    return 0
+
+
 def cmd_close(args) -> int:
     run_dir = _require_run(args)
     plan = load_plan(run_dir) or {}
+    try:
+        pointer = read_json(run_dir.parent.parent / "current_task.json")
+        if isinstance(pointer, dict) and pointer.get("taskId") == run_dir.name:
+            (run_dir.parent.parent / "current_task.json").unlink()
+    except OSError:
+        pass
     view = build_run_view(run_dir)
     open_steps = [step["id"] for step in (view or {}).get("steps", [])
                   if step["status"] in OPEN_STEPS]
@@ -2415,10 +2452,10 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--json", dest="json_out", action="store_true", default=argparse.SUPPRESS)
     common.add_argument("--no-render", action="store_true", default=argparse.SUPPRESS)
 
-    parser = argparse.ArgumentParser(prog="board.py", description="live-progress board CLI",
+    parser = argparse.ArgumentParser(prog="board.py", description="TaskPulse board CLI",
                                      parents=[common])
     parser.set_defaults(home=None, root=None, session=None, json_out=False, no_render=False)
-    parser.add_argument("--version", action="version", version=f"live-progress {VERSION}")
+    parser.add_argument("--version", action="version", version=f"task-pulse {VERSION}")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("init", parents=[common], help="create a task in the current session")
@@ -2503,6 +2540,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--by", default="lead")
     p.add_argument("--run")
     p.set_defaults(func=cmd_revise)
+
+    p = sub.add_parser("current", parents=[common], help="show the current task pointer")
+    p.set_defaults(func=cmd_current)
 
     p = sub.add_parser("close", parents=[common], help="close the run")
     p.add_argument("--by", default="lead")
