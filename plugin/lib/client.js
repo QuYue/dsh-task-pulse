@@ -10,11 +10,11 @@ window.__ModuleLoader__.load({
     const CSS = `
 .dsh-lp-card {
   box-sizing: border-box;
-  width: 100%;
-  max-width: var(--dsh-composer-card-max-width);
+  width: calc(100% - var(--dsh-composer-side-clearance) - var(--dsh-composer-side-clearance) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset));
+  max-width: calc(var(--dsh-composer-card-max-width) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset));
   margin: 0 auto 8px; padding: 0; flex: none;
   border: 1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.12));
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-lg, 16px);
   background: var(--dsw-specific-input-major, #1a2230);
   color: var(--dsw-alias-label-primary, #e6edf3);
   font-size: 12px; line-height: 1.5;
