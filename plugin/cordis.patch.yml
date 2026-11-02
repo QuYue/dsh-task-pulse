@@ -1,0 +1,2 @@
+# Loader entry for the v2 card plugin (applied to the desktop profile patch layer).
+- name: 'dsh-live-progress-card'

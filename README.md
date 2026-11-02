@@ -42,8 +42,12 @@ live-progress/
 ├── demo/
 │   ├── run_demo.py               # 两个会话的演示（本地并行任务 + 远程推送）
 │   └── demo_a/task/              # 被操作的示例小项目
+├── plugin/                       # v2：DSH 输入框上方进度卡片（B1 静态骨架）
+│   ├── lib/client.js             # 客户端 bundle（注册 conversation.input.dock）
+│   ├── preview.html              # 不装 DSH 也能看的静态样式
+│   └── README.md                 # 安装步骤（B4）
 ├── tests/test_board.py           # 标准库 unittest
-└── docs/{contract.md,state.sample.json}
+└── docs/{contract.md,state.sample.json,v2-card-spec.md,v2-b0-findings.md}
 ```
 
 ## 版本

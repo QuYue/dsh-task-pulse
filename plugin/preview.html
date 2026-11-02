@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>live-progress card · 静态预览（B1）</title>
+<style>
+  :root {
+    --bg: #0b0f16; --panel: #131a25; --text: #e6edf3; --muted: #8b98ab;
+    --border: rgba(255,255,255,.12); --blue: #4f8cff; --green: #3ddc97;
+    --amber: #ffb454; --gray: #8892a6;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 20px; background: var(--bg); color: var(--text);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { max-width: 880px; margin: 0 auto; }
+  .page h1 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+  .page p { margin: 0 0 22px; color: var(--muted); font-size: 12px; }
+  .dsh-lp-card {
+    width: 100%; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--panel); color: var(--text); font-size: 12px; line-height: 1.5;
+    box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  }
+  .dsh-lp-head { display: flex; align-items: center; gap: 6px; padding: 7px 10px; cursor: pointer; user-select: none; }
+  .dsh-lp-head:hover { background: rgba(127,127,127,.06); border-radius: 9px; }
+  .dsh-lp-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .dsh-lp-dot-done { background: var(--green); }
+  .dsh-lp-dot-doing { background: var(--blue); animation: lp-pulse 1.6s infinite; }
+  .dsh-lp-dot-wait { background: var(--gray); }
+  @keyframes lp-pulse { 50% { opacity: .35; } }
+  .dsh-lp-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .dsh-lp-summary { margin-left: auto; flex: none; color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .dsh-lp-chevron { flex: none; color: var(--muted); font-size: 11px; }
+  .dsh-lp-body { border-top: 1px solid rgba(255,255,255,.08); padding: 6px 10px 8px; }
+  .dsh-lp-meta { color: var(--muted); font-size: 11px; margin-bottom: 3px; }
+  .dsh-lp-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .dsh-lp-table th {
+    text-align: left; font-weight: 500; color: var(--muted); font-size: 10px;
+    padding: 2px 4px; border-bottom: 1px solid rgba(255,255,255,.08); white-space: nowrap;
+  }
+  .dsh-lp-table td { padding: 3px 4px; border-bottom: 1px solid rgba(127,127,127,.08); vertical-align: middle; }
+  .dsh-lp-table tr:last-child td { border-bottom: 0; }
+  .dsh-lp-id {
+    font-family: var(--mono); font-size: 10px; color: var(--muted);
+    background: rgba(127,127,127,.12); border-radius: 4px; padding: 0 4px; margin-right: 4px;
+  }
+  .dsh-lp-owner { white-space: nowrap; }
+  .dsh-lp-time { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .dsh-lp-progress { display: flex; align-items: center; gap: 4px; }
+  .dsh-lp-track { width: 46px; height: 4px; border-radius: 999px; background: rgba(127,127,127,.22); overflow: hidden; flex: none; }
+  .dsh-lp-fill { height: 100%; border-radius: 999px; background: var(--blue); }
+  .dsh-lp-pct { font-size: 10px; color: #cfd9e6; font-variant-numeric: tabular-nums; }
+  .dsh-lp-note-mark {
+    margin-left: 4px; font-size: 10px; color: var(--amber); background: rgba(255,180,84,.12);
+    border: 1px solid rgba(255,180,84,.35); border-radius: 4px; padding: 0 4px;
+    cursor: pointer; font-family: inherit;
+  }
+  .dsh-lp-note {
+    margin: 3px 0 1px; font-size: 10.5px; color: var(--muted);
+    background: rgba(127,127,127,.08); border-left: 2px solid rgba(255,180,84,.5);
+    padding: 2px 6px; border-radius: 0 4px 4px 0;
+  }
+  .dsh-lp-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+  .dsh-lp-link { color: #8fc1ff; font-size: 11px; text-decoration: none; }
+  .dsh-lp-link:hover { text-decoration: underline; }
+  .dsh-lp-btn {
+    font-size: 11px; font-family: inherit; cursor: pointer; color: #cfd9e6;
+    background: transparent; border: 1px solid var(--border); border-radius: 5px; padding: 1px 7px;
+  }
+  .dsh-lp-btn:hover { background: rgba(127,127,127,.12); }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>live-progress card · 静态预览（B1）</h1>
+  <p>这是 v2 卡片的静态样式，数据为示例；最终会显示在 DSH 输入框上方、与原生 Todo 同层。点击卡片头部展开/收起，点 <b>注</b> 看备注。</p>
+  <div id="card"></div>
+</div>
+<script>
+const SAMPLE = {
+  name: "18:40 · 步骤表内联进度",
+  status: "doing", done: 2, total: 5, percent: 60, elapsed: "12m",
+  steps: [
+    { id: "s1", size: "S", title: "调整 size/进度布局", status: "done", owner: "lead", progress: null, start: "18:40:12", end: "18:44:03", elapsed: "3m51s" },
+    { id: "s2", size: "M", title: "压缩行高与进度条展示", status: "done", owner: "lead", progress: null, start: "18:44:03", end: "18:52:20", elapsed: "8m17s" },
+    { id: "s3", size: "S", title: "增加开始/结束时间列", status: "doing", owner: "coder", progress: 45, start: "18:52:20", end: "", elapsed: "3m", note: "等待接口字段确认" },
+    { id: "s4", size: "S", title: "补充 v2 文档", status: "wait", owner: "", progress: null, start: "", end: "", elapsed: "" },
+    { id: "s5", size: "S", title: "测试与页面校验", status: "wait", owner: "", progress: null, start: "", end: "", elapsed: "" }
+  ]
+};
+const STATUS = {
+  done: { label: "完成", dot: "dsh-lp-dot-done", color: "#3ddc97" },
+  doing: { label: "进行", dot: "dsh-lp-dot-doing", color: "#4f8cff" },
+  wait: { label: "等待", dot: "dsh-lp-dot-wait", color: "#8892a6" }
+};
+let open = false;
+const notes = {};
+const root = document.getElementById("card");
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "className") node.className = v;
+    else if (k === "onClick") node.addEventListener("click", v);
+    else node.setAttribute(k, v);
+  }
+  for (const child of children.flat()) {
+    if (child == null) continue;
+    node.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
+  }
+  return node;
+}
+
+function progressCell(step) {
+  if (step.progress == null) return el("span", { className: "dsh-lp-time" }, "—");
+  const fill = el("span", { className: "dsh-lp-fill" });
+  fill.style.width = step.progress + "%";
+  return el("span", { className: "dsh-lp-progress" },
+    el("span", { className: "dsh-lp-track" }, fill),
+    el("span", { className: "dsh-lp-pct" }, step.progress + "%"));
+}
+
+function render() {
+  root.textContent = "";
+  const meta = STATUS[SAMPLE.status];
+  const head = el("div", { className: "dsh-lp-head", role: "button", tabIndex: "0" },
+    el("span", { className: "dsh-lp-dot " + meta.dot }),
+    el("span", { className: "dsh-lp-name" }, SAMPLE.name),
+    el("span", { className: "dsh-lp-summary" }, meta.label + " · " + SAMPLE.done + "/" + SAMPLE.total + " · " + SAMPLE.percent + "%"),
+    el("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸"));
+  head.addEventListener("click", () => { open = !open; render(); });
+
+  let body = null;
+  if (open) {
+    const rows = [];
+    for (const step of SAMPLE.steps) {
+      const st = STATUS[step.status];
+      const title = el("td", null,
+        el("span", { className: "dsh-lp-id" }, step.id + " | " + step.size),
+        el("span", null, step.title));
+      if (step.note) {
+        const mark = el("button", { className: "dsh-lp-note-mark", type: "button" }, "注");
+        mark.addEventListener("click", (e) => { e.stopPropagation(); notes[step.id] = !notes[step.id]; render(); });
+        title.appendChild(mark);
+      }
+      rows.push(el("tr", null,
+        el("td", { style: "color:" + st.color + ";white-space:nowrap" }, st.label),
+        title,
+        el("td", { className: "dsh-lp-owner" }, step.owner || "—"),
+        el("td", null, progressCell(step)),
+        el("td", { className: "dsh-lp-time" }, (step.start || "—") + (step.end ? " – " + step.end : "")),
+        el("td", { className: "dsh-lp-time" }, step.elapsed || "—")));
+      if (step.note && notes[step.id]) {
+        rows.push(el("tr", null, el("td", { colSpan: "6" }, el("div", { className: "dsh-lp-note" }, "备注：" + step.note))));
+      }
+    }
+    const table = el("table", { className: "dsh-lp-table" },
+      el("thead", null, el("tr", null,
+        ["状态", "步骤", "执行者", "进度", "开始/结束", "耗时"].map((label) => el("th", null, label)))),
+      el("tbody", null, rows));
+    const link = el("a", { href: "http://127.0.0.1:8770/", target: "_blank", rel: "noreferrer", className: "dsh-lp-link" }, "打开完整看板 8770");
+    const collapse = el("button", { className: "dsh-lp-btn", type: "button" }, "收起");
+    collapse.addEventListener("click", () => { open = false; render(); });
+    body = el("div", { className: "dsh-lp-body" },
+      el("div", { className: "dsh-lp-meta" }, "用时 " + SAMPLE.elapsed + " · 步骤 " + SAMPLE.steps.length + " 个"),
+      table,
+      el("div", { className: "dsh-lp-actions" }, link, collapse));
+  }
+  root.appendChild(el("div", { className: "dsh-lp-card" }, head, body));
+}
+render();
+</script>
+</body>
+</html>
