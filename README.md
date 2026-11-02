@@ -47,6 +47,8 @@
 - 不显示 S/M/L 规模，不显示证据列；备注用 `注` 展开；
 - 超过 10 个步骤时表格区域滚动；
 - 折叠状态按 session 持久化到 localStorage；
+- 与原生 Todo 同插槽共存（Todo order 0，卡片 order 1），不修改 `todos`；
+- 版式：与原生 Todo/正文列同宽、20px 圆角、无外边框、输入框同色背景；
 - 「打开完整看板 8770」跳到任务页；
 - 与网页版并存，不替代。
 
@@ -244,14 +246,16 @@ node plugin/smoke-test.cjs
 
 ## 版本与发布
 
-- **v2.0.2（当前）**：卡片最终版 —— composer 对齐、输入框同色背景、
-  展开表无 S/M/L、`#N` 后内嵌进度条、`ensure`/`auto` 一键启动；
+- **v2.0.3（当前）**：与原生 Todo/正文列同宽、20px 圆角、无外边框、输入框同色背景；
+  重写 README，新增排障文档与 v2 最终规格；
+- **v2.0.2**：展开表无 S/M/L、`#N` 后内嵌进度条、composer 同宽同背景；
 - **v2.0.1**：卡片对齐修复、安装 `- insert:` 修复、`ensure`/`auto`；
 - **v2.0.0**：DSH 输入框上方卡片首版；
 - **v1.0.0**：网页看板 + 文件驱动账本。
 
 发布记录见 [CHANGELOG.md](CHANGELOG.md)；
 v2 规格见 [docs/v2-card-spec.md](docs/v2-card-spec.md)，
+排障见 [docs/troubleshooting.md](docs/troubleshooting.md)，
 B0 插槽结论见 [docs/v2-b0-findings.md](docs/v2-b0-findings.md)。
 
 ## 已知限制

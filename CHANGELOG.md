@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.0.3 — 2026-11-03
+
+最终样式与文档。
+
+- 卡片宽度改为与原生 Todo / 正文列同宽（TodoPanel 公式），不再用 composer 宽度；
+- 圆角改为 `var(--dsw-radius-xl, 20px)`，去掉外边框；
+- 背景保持输入框的 `--dsw-specific-input-major`；
+- 与原生 Todo 同 slot 共存（Todo order 0，卡片 order 1），不修改 `todos`；
+- 新增 [docs/troubleshooting.md](docs/troubleshooting.md)：卡片不显示、hub、安装、共存排障；
+- 更新 [docs/v2-card-spec.md](docs/v2-card-spec.md) 最终样式与阶段状态；
+- README 更新 v2.0.3；
+- 33 tests + smoke test 通过。
+
 ## v2.0.2 — 2026-11-03
 
 卡片最终版与 README 重写。
