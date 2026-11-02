@@ -535,7 +535,7 @@ def _step_states(events: list) -> dict:
             evidence = _event_evidence(event)
             if evidence:
                 record["evidence"] = evidence
-            if event_type == "done":
+            if event_type == "done" and record.get("progress") is not None:
                 record["progress"] = 100
         elif event_type in ("report", "heartbeat"):
             record = states.setdefault(step_id, {
@@ -551,8 +551,6 @@ def _step_states(events: list) -> dict:
         percent = _coerce_percent(event.get("progress"))
         if percent is not None and step_id in states and event_type != "report":
             states[step_id]["progress"] = percent
-            if event_type == "done":
-                states[step_id]["progress"] = 100
     return states
 
 
