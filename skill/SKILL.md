@@ -87,6 +87,13 @@ BOARD="python3 .dsh/skills/live-progress/scripts/board.py"
    用后台任务方式启动，保持运行；URL 形如 `http://127.0.0.1:8770/`。
    用户打开一次即可，之后页面自动刷新。
 
+## 展示序号与内部 id
+
+- `plan.steps[].id` 是**稳定内部主键**，事件、`start/done` 命令都用它；
+- 看板/卡片显示 `s1..sN`，这是**当前真实顺序的展示序号**（`view.steps[].seq`），
+  会随 `revise` 插入/重排而变化；不要用展示序号反推内部 id；
+- `order` 决定真实顺序；已完成步骤自然排在前面，新增步骤用 `order` 插入。
+
 ## 继续已有任务（强制）
 
 `/live-progress` 只加载本文件，不会自动创建任务或写事件。继续一个已存在的任务时：

@@ -19,6 +19,7 @@
 | 删除被依赖的步骤 | ⚠️ 允许 | 依赖指向 superseded（终态），不会永远阻塞；语义上由 Lead 判断 |
 | 修改进行中步骤的 owner | ⚠️ 允许 | 不强制中断；建议先 block/revise 再换人 |
 | 重命名步骤 id | ❌ | id 是事件主键；要换 id = 删除旧步骤 + 新增新步骤 |
+| 展示序号 | ✅ | `view.steps[].seq` 按真实顺序生成；与内部 id 解耦 |
 | 删除任务/项目 | ✅ | 走 `task rm` / `project remove`，不属于 revise |
 
 ## 本次补的防护

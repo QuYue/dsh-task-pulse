@@ -674,6 +674,7 @@ def build_run_view(run_dir: Path, now: datetime | None = None) -> dict | None:
                     blocked_by.append(dep)
         view = {
             "id": step["id"],
+            "seq": len(step_views) + 1,
             "phaseId": step["phaseId"],
             "title": step["title"],
             "owner": step["owner"],

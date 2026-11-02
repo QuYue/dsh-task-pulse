@@ -192,7 +192,7 @@ function render() {
                         style: "width:" + Math.max(0, Math.min(100, step.progress)) + "%" })),
                     el("span", { className: "dsh-lp-summary-pct" }, step.progress + "%"))
                 : null,
-              el("span", { className: "dsh-lp-step-name" }, step.id + " " + step.title));
+              el("span", { className: "dsh-lp-step-name" }, "s" + (SAMPLE.steps.indexOf(step) + 1) + " " + step.title));
           })
         : el("span", { className: "dsh-lp-current" }, "等待下一步")));
   head.addEventListener("click", () => { open = !open; render(); });

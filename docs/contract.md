@@ -98,6 +98,10 @@ See `docs/state.sample.json`. Notable fields:
 - `projects[].runs[].agents[].status`: `working | idle | blocked | done`; `stalled` bool;
   `lastSeenAgoSec` number; `currentStep` / `currentText` strings.
 - `steps[].status`: `pending | in_progress | blocked | done | failed | skipped | superseded`.
+- `steps[].id`: stable event key. Never display it as the step number; events and
+  `start/done` commands address this id.
+- `view.steps[].seq`: 1-based display ordinal derived from `(phase order, order)`.
+  The web board and card show `s{seq}`.
 - `steps[].order`: optional numeric display order within a phase; lower comes first.
   `revise` should set it when inserting a new step into an existing phase.
 - `steps[].progress`: 0-100 or null (latest `report`/`heartbeat --percent`; `done` forces 100).
