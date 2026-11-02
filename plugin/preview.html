@@ -29,7 +29,7 @@
   .dsh-lp-line1 { display: flex; align-items: center; gap: 6px; }
   .dsh-lp-line2 { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding-left: 13px; }
   .dsh-lp-current { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
-  .dsh-lp-bar { flex: 1; min-width: 40px; height: 4px; border-radius: 999px; background: rgba(127,127,127,.22); overflow: hidden; }
+  .dsh-lp-bar { width: 64px; flex: none; height: 4px; border-radius: 999px; background: rgba(127,127,127,.22); overflow: hidden; }
   .dsh-lp-bar-fill { display: block; height: 100%; border-radius: 999px; background: var(--blue); }
   .dsh-lp-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
   .dsh-lp-dot-done { background: var(--green); }
@@ -37,7 +37,8 @@
   .dsh-lp-dot-wait { background: var(--gray); }
   @keyframes lp-pulse { 50% { opacity: .35; } }
   .dsh-lp-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-  .dsh-lp-summary { margin-left: auto; flex: none; color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .dsh-lp-summary { margin-left: auto; flex: none; color: var(--muted); font-size: 11px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .dsh-lp-summary-pct { color: #cfd9e6; font-variant-numeric: tabular-nums; }
   .dsh-lp-chevron { flex: none; color: var(--muted); font-size: 11px; }
   .dsh-lp-body { border-top: 1px solid rgba(255,255,255,.08); padding: 6px 10px 8px; }
   .dsh-lp-meta { color: var(--muted); font-size: 11px; margin-bottom: 3px; }
@@ -137,13 +138,15 @@ function render() {
     el("div", { className: "dsh-lp-line1" },
       el("span", { className: "dsh-lp-dot " + meta.dot }),
       el("span", { className: "dsh-lp-name" }, SAMPLE.name),
-      el("span", { className: "dsh-lp-summary" }, meta.label + " · " + SAMPLE.done + "/" + SAMPLE.total + " · " + SAMPLE.percent + "%"),
+      el("span", { className: "dsh-lp-summary" },
+        el("span", null, meta.label + " · " + SAMPLE.done + "/" + SAMPLE.total),
+        el("span", { className: "dsh-lp-bar" },
+          el("span", { className: "dsh-lp-bar-fill", style: "width:" + barPct + "%" })),
+        el("span", { className: "dsh-lp-summary-pct" }, SAMPLE.percent + "%")),
       el("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸")),
     el("div", { className: "dsh-lp-line2" },
       el("span", { className: "dsh-lp-current" },
-        currentStep ? ("正在：" + currentStep.id + " " + currentStep.title) : "等待下一步"),
-      el("span", { className: "dsh-lp-bar" },
-        el("span", { className: "dsh-lp-bar-fill", style: "width:" + barPct + "%" }))));
+        currentStep ? ("正在：" + currentStep.id + " " + currentStep.title) : "等待下一步")));
   head.addEventListener("click", () => { open = !open; render(); });
 
   let body = null;

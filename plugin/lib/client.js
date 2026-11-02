@@ -26,7 +26,7 @@ window.__ModuleLoader__.load({
   color: var(--dsw-alias-label-tertiary, #8b98ab); font-size: 11px;
 }
 .dsh-lp-bar {
-  flex: 1; min-width: 40px; height: 4px; border-radius: 999px;
+  width: 64px; flex: none; height: 4px; border-radius: 999px;
   background: rgba(127,127,127,.22); overflow: hidden;
 }
 .dsh-lp-bar-fill { display: block; height: 100%; border-radius: 999px; background: #4f8cff; }
@@ -43,7 +43,9 @@ window.__ModuleLoader__.load({
 .dsh-lp-summary {
   margin-left: auto; flex: none; color: var(--dsw-alias-label-tertiary, #8b98ab);
   font-size: 11px; white-space: nowrap;
+  display: flex; align-items: center; gap: 6px;
 }
+.dsh-lp-summary-pct { color: var(--dsw-alias-label-secondary, #cfd9e6); font-variant-numeric: tabular-nums; }
 .dsh-lp-chevron { flex: none; color: var(--dsw-alias-label-tertiary, #8b98ab); font-size: 11px; }
 .dsh-lp-body {
   border-top: 1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.08));
@@ -162,15 +164,17 @@ window.__ModuleLoader__.load({
           h("span", { className: "dsh-lp-dot " + meta.dot }),
           h("span", { className: "dsh-lp-name" }, SAMPLE.name),
           h("span", { className: "dsh-lp-summary" },
-            meta.label + " · " + SAMPLE.done + "/" + SAMPLE.total + " · " + SAMPLE.percent + "%"),
+            h("span", null, meta.label + " · " + SAMPLE.done + "/" + SAMPLE.total),
+            h("span", { className: "dsh-lp-bar" },
+              h("span", { className: "dsh-lp-bar-fill", style: { width: barPct + "%" } })
+            ),
+            h("span", { className: "dsh-lp-summary-pct" }, SAMPLE.percent + "%")
+          ),
           h("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸")
         ),
         h("div", { className: "dsh-lp-line2" },
           h("span", { className: "dsh-lp-current" },
-            currentStep ? ("正在：" + currentStep.id + " " + currentStep.title) : "等待下一步"),
-          h("span", { className: "dsh-lp-bar" },
-            h("span", { className: "dsh-lp-bar-fill", style: { width: barPct + "%" } })
-          )
+            currentStep ? ("正在：" + currentStep.id + " " + currentStep.title) : "等待下一步")
         )
       );
 
