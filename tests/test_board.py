@@ -263,5 +263,63 @@ class BoardTestCase(unittest.TestCase):
         self.assertTrue(project["runs"][0]["steps"])
 
 
+    def test_exec_records_success_and_heartbeats(self):
+        self.init()
+        log = self.base / "exec-success.log"
+        result = self.cli(
+            "exec", "s2", "--agent", "coder", "--heartbeat", "0.2", "--quiet",
+            "--log", str(log), "--",
+            PY, "-c", "import time; print('exec-ok'); time.sleep(0.6)",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        view = self.status()
+        step = next(item for item in view["steps"] if item["id"] == "s2")
+        self.assertEqual(step["status"], "done")
+        self.assertIn(str(log.resolve()), step["evidence"])
+        self.assertTrue(log.exists())
+        self.assertIn("exec-ok", log.read_text())
+        events = (self.run_dir() / "events" / "coder.jsonl").read_text()
+        self.assertIn('"heartbeat"', events)
+
+    def test_exec_marks_failed_on_nonzero_exit(self):
+        self.init()
+        result = self.cli(
+            "exec", "s2", "--agent", "coder", "--quiet", "--",
+            PY, "-c", "import sys; print('boom'); sys.exit(3)",
+            check=False,
+        )
+        self.assertEqual(result.returncode, 3)
+        step = next(item for item in self.status()["steps"] if item["id"] == "s2")
+        self.assertEqual(step["status"], "failed")
+        self.assertIn("exit 3", step["note"])
+
+    def test_exec_timeout_kills_command(self):
+        self.init()
+        started = time.time()
+        result = self.cli(
+            "exec", "s2", "--agent", "coder", "--heartbeat", "0.2",
+            "--timeout", "0.5", "--quiet", "--",
+            PY, "-c", "import time; time.sleep(30)",
+            check=False,
+        )
+        elapsed = time.time() - started
+        self.assertEqual(result.returncode, 124)
+        self.assertLess(elapsed, 8)
+        step = next(item for item in self.status()["steps"] if item["id"] == "s2")
+        self.assertEqual(step["status"], "failed")
+        self.assertIn("timeout", step["note"])
+
+    def test_exec_keeps_wrapped_command_flags(self):
+        self.init()
+        log = self.base / "exec-args.log"
+        result = self.cli(
+            "exec", "s2", "--agent", "coder", "--quiet", "--log", str(log), "--",
+            PY, "-c", "import sys; print('ARGS=' + ','.join(sys.argv[1:]))",
+            "--json", "--home", "foo",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("ARGS=--json,--home,foo", log.read_text())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

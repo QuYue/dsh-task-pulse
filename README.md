@@ -69,6 +69,7 @@ ln -s "$PWD/live-progress/skill" ~/.dsh/skills/live-progress
 B="python3 skill/scripts/board.py"
 $B init --project-id demo --name 示例 --plan-file plan.json
 $B start s1 --agent lead && $B done s1 --agent lead --evidence out.log --start s2
+$B exec s2 --agent coder --heartbeat 30 --timeout 1800 -- pytest -q   # 长命令自动记账
 $B status [--json] [--all]
 $B revise --plan-file plan.v2.json --reason "需求变更"
 $B close --by lead
@@ -76,6 +77,9 @@ $B serve --port 8770 [--open]
 $B project add --id shop-api --kind ingest      # 远程推送项目，打印 token
 $B push --to http://127.0.0.1:8770 --project-id shop-api
 ```
+
+三层协议：Lead 流程在 `SKILL.md`，子 agent/程序的记账协议在 `references/record.md`，
+`board.py exec` 让长命令和后台 job 自己写 start/心跳/终态，不依赖 agent 记得轮询。
 
 ## 远程与安全
 

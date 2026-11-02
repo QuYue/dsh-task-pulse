@@ -34,6 +34,7 @@ pushes into `inbox`). `projectId` is an explicit stable slug supplied by the pro
 | `done STEP --agent A [--evidence P]... [--note T] [--start NEXT]` | step -> done, optionally start next |
 | `block STEP --agent A --reason T` / `fail ...` / `skip ...` / `resume ...` | terminal / recovery |
 | `heartbeat --agent A [--step STEP] [--current T]` | liveness line, no state machine change |
+| `exec STEP --agent A [--heartbeat SEC] [--timeout SEC] [--quiet] -- CMD...` | run a command while recording start/heartbeats/done-or-fail; log is evidence |
 | `revise --by lead --reason T --plan-file P` | plan revision++ (Lead only) |
 | `status [--json]` | print current snapshot summary |
 | `render` | rewrite `state.json` + `BOARD.md` |

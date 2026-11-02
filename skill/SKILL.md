@@ -14,6 +14,9 @@ whenToUse: 任务预计超过约 10 分钟，或会派生子 agent、后台任�
 
 不要在 `plan.json` 里手写状态；状态永远由事件推导。计划结构变更只能通过 `revise`。
 
+> 主 agent 读本文件；子 agent / 后台命令只需读 [`references/record.md`](references/record.md)
+> （3 条命令 + `exec` 包装器 + spawn 模板）。
+
 ## 何时启用
 
 启用：多步任务、会派生子 agent / 后台 job、远程执行、用户要求实时监管。
@@ -21,7 +24,7 @@ whenToUse: 任务预计超过约 10 分钟，或会派生子 agent、后台任�
 
 ## 路径与变量
 
-skill 目录通常为以下之一（存在即用）：
+skill 目录通常为以下之一（存在即用）。主协议在本文件，子 agent 的记账协议在 `references/record.md`：
 
 - `.dsh/skills/live-progress`
 - `~/.dsh/skills/live-progress`
@@ -90,6 +93,16 @@ $BOARD skip s4 --agent lead --reason "范围调整"
 $BOARD resume s4 --agent reviewer
 ```
 
+**长命令 / 后台任务：用 `exec` 自动记账**（不要手写 start + 轮询）：
+
+```bash
+$BOARD exec s5 --agent bg-1 --heartbeat 30 --timeout 1800 -- pytest -q
+```
+
+它自己写 `start`、每 30s 写心跳（带最后一行输出）、退出码 0 写 `done`（日志作证据）、
+非 0 写 `fail`、超时杀进程组；输出实时打印，`--quiet` 可静默。用 DSH 后台任务跑它也可以，
+后台面板看 raw job、看板看步骤，两边都不断更。
+
 规则：
 
 1. **一步一 owner**：同一时间只做一个 step；只有 owner（或 lead）能更新该步。
@@ -104,8 +117,10 @@ $BOARD resume s4 --agent reviewer
    ```
    本任务使用 live-progress 记账。你的步骤是 <stepId>（owner=<agentName>）。
    开始：$BOARD start <stepId> --agent <agentName>
-   每 60–90 秒：$BOARD heartbeat --agent <agentName> --step <stepId> --current "<在做什么>"
+   长命令/后台任务：$BOARD exec <stepId> --agent <agentName> --heartbeat 30 -- <command...>
+   短步骤心跳：$BOARD heartbeat --agent <agentName> --step <stepId> --current "<在做什么>"
    完成：$BOARD done <stepId> --agent <agentName> --evidence <path> --note "<结果>"
+   失败：$BOARD fail <stepId> --agent <agentName> --reason "<原因>"
    只追加事件，不修改 plan.json；计划要变就发消息给 Lead。
    ```
 

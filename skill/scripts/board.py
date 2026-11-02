@@ -16,6 +16,7 @@ import json
 import os
 import random
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -1451,6 +1452,178 @@ def cmd_heartbeat(args) -> int:
     return 0
 
 
+def _terminate_process_group(proc) -> None:
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except Exception:
+        try:
+            proc.terminate()
+        except Exception:
+            return
+    try:
+        proc.wait(timeout=3)
+        return
+    except Exception:
+        pass
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
+def cmd_exec(args) -> int:
+    """Run a command and record the whole lifecycle on one step.
+
+    start -> periodic heartbeat (with the last output line) -> done/fail.
+    This is what makes background jobs and long commands account for themselves
+    instead of relying on the agent to poll and remember.
+    """
+    run_dir = _require_run(args)
+    plan = load_plan(run_dir) or {}
+    step = _find_step(plan, slugify(args.step, "s"))
+    agent = slugify(args.agent or step["owner"], "agent")
+    if agent != step["owner"] and agent != "lead" and not args.force:
+        raise SystemExit(f"step {step['id']} is owned by {step['owner']}; revise the plan or use --force")
+    view = build_run_view(run_dir) or {}
+    current = next((item for item in view.get("steps", []) if item["id"] == step["id"]), None)
+    if current and current["status"] in TERMINAL_STEPS and not args.force:
+        raise SystemExit(f"step {step['id']} is already {current['status']} (use --force)")
+
+    command = list(args.command or [])
+    while command and command[0] == "--":
+        command = command[1:]
+    if not command:
+        raise SystemExit("exec needs a command, e.g. board.py exec s5 --agent bg-1 -- pytest -q")
+    label = args.label or " ".join(command)
+    started = now_dt()
+    started_ts = iso(started)
+    log_path = Path(args.log).expanduser().resolve() if args.log else \
+        run_dir / "exec" / f"{step['id']}-{started.strftime('%H%M%S')}.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "w", encoding="utf-8") as log:
+        log.write(f"# live-progress exec\n# step: {step['id']} ({step['title']})\n"
+                  f"# agent: {agent}\n# started: {started_ts}\n# command: {' '.join(command)}\n\n")
+
+    append_event(run_dir, {
+        "agent": agent, "type": "start", "stepId": step["id"],
+        "note": args.note or "", "command": " ".join(command),
+    })
+    maybe_render(run_dir, args)
+
+    env = dict(os.environ)
+    env.setdefault("PYTHONUNBUFFERED", "1")
+    try:
+        proc = subprocess.Popen(
+            command, cwd=args.cwd or None, env=env, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            bufsize=1, start_new_session=True,
+        )
+    except OSError as exc:
+        append_event(run_dir, {
+            "agent": agent, "type": "fail", "stepId": step["id"],
+            "note": f"spawn failed: {exc}", "evidence": [str(log_path)],
+        })
+        maybe_render(run_dir, args)
+        raise SystemExit(f"exec: cannot start command: {exc}")
+
+    tail = {"last": ""}
+
+    def pump():
+        try:
+            with open(log_path, "a", encoding="utf-8") as log:
+                for line in proc.stdout:
+                    log.write(line)
+                    log.flush()
+                    tail["last"] = line.rstrip()[:140]
+                    if not args.quiet:
+                        sys.stdout.write(line)
+                        sys.stdout.flush()
+        except Exception as exc:  # pragma: no cover - defensive
+            tail["last"] = f"reader error: {exc}"
+
+    reader = threading.Thread(target=pump, name="exec-output", daemon=True)
+    reader.start()
+
+    heartbeat = max(0.2, float(args.heartbeat or 0))
+    deadline = time.time() + args.timeout if args.timeout else None
+    timed_out = False
+    interrupted = False
+    exit_code = None
+    try:
+        while True:
+            wait_for = heartbeat
+            if deadline:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    timed_out = True
+                    break
+                wait_for = min(wait_for, max(0.05, remaining))
+            try:
+                exit_code = proc.wait(timeout=wait_for)
+                break
+            except subprocess.TimeoutExpired:
+                if deadline and time.time() >= deadline:
+                    timed_out = True
+                    break
+                elapsed = int((now_dt() - started).total_seconds())
+                detail = f" · {tail['last']}" if tail["last"] else ""
+                append_event(run_dir, {
+                    "agent": agent, "type": "heartbeat", "stepId": step["id"],
+                    "current": f"{label[:80]} 运行中 {elapsed}s{detail}"[:220],
+                })
+                maybe_render(run_dir, args)
+    except KeyboardInterrupt:
+        interrupted = True
+    finally:
+        if timed_out or interrupted:
+            _terminate_process_group(proc)
+            try:
+                exit_code = proc.wait(timeout=3)
+            except Exception:
+                exit_code = -1
+        reader.join(timeout=3)
+
+    duration = int((now_dt() - started).total_seconds())
+    with open(log_path, "a", encoding="utf-8") as log:
+        log.write(f"\n# finished: {iso()} exit={exit_code} duration={duration}s\n")
+
+    if interrupted:
+        status_line = "interrupted"
+        append_event(run_dir, {
+            "agent": agent, "type": "fail", "stepId": step["id"],
+            "note": "interrupted by user", "evidence": [str(log_path)],
+        })
+        code = 130
+    elif timed_out:
+        status_line = f"timeout after {args.timeout}s"
+        append_event(run_dir, {
+            "agent": agent, "type": "fail", "stepId": step["id"],
+            "note": f"timeout after {args.timeout}s", "evidence": [str(log_path)],
+        })
+        code = 124
+    elif exit_code == 0:
+        status_line = f"exit 0 · {duration}s"
+        append_event(run_dir, {
+            "agent": agent, "type": "done", "stepId": step["id"],
+            "note": args.note or status_line, "evidence": [str(log_path)],
+        })
+        code = 0
+    else:
+        status_line = f"exit {exit_code} · {duration}s"
+        append_event(run_dir, {
+            "agent": agent, "type": "fail", "stepId": step["id"],
+            "note": f"exit {exit_code}", "evidence": [str(log_path)],
+        })
+        code = int(exit_code) if isinstance(exit_code, int) and exit_code > 0 else 1
+
+    maybe_render(run_dir, args)
+    print(f"[live-progress] step {step['id']} {status_line}; log: {log_path}")
+    return code
+
+
 def cmd_agent(args) -> int:
     run_dir = _require_run(args)
     plan = load_plan(run_dir) or {}
@@ -1739,6 +1912,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--run")
     p.set_defaults(func=cmd_heartbeat)
 
+    p = sub.add_parser("exec", parents=[common], help="run a command while recording a step")
+    p.add_argument("step")
+    p.add_argument("--agent")
+    p.add_argument("--heartbeat", type=float, default=30.0)
+    p.add_argument("--timeout", type=float, default=0.0)
+    p.add_argument("--label")
+    p.add_argument("--note")
+    p.add_argument("--log")
+    p.add_argument("--cwd")
+    p.add_argument("--quiet", action="store_true")
+    p.add_argument("--force", action="store_true")
+    p.add_argument("--run")
+    p.set_defaults(func=cmd_exec)
+
     p = sub.add_parser("agent", parents=[common], help="update the agent roster")
     p.add_argument("agent_id")
     p.add_argument("--name")
@@ -1828,6 +2015,9 @@ def extract_globals(argv):
             flags.add("json_out" if token == "--json" else "no_render")
             index += 1
             continue
+        if token == "--":
+            rest.extend(argv[index:])
+            break
         rest.append(token)
         index += 1
     return values, flags, rest
@@ -1836,8 +2026,14 @@ def extract_globals(argv):
 def main(argv=None) -> int:
     raw = list(sys.argv[1:] if argv is None else argv)
     values, flags, rest = extract_globals(raw)
+    wrapped = None
+    if "--" in rest:
+        cut = rest.index("--")
+        wrapped = rest[cut + 1:]
+        rest = rest[:cut]
     parser = build_parser()
     args = parser.parse_args(rest)
+    args.command = wrapped or []
     for key, value in values.items():
         setattr(args, key, value)
     for key in flags:
