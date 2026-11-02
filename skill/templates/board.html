@@ -1,0 +1,1911 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>live-progress · 任务进度看板</title>
+<style>
+  :root {
+    --bg: #0b0f16;
+    --panel: #131a25;
+    --panel-2: #17202d;
+    --border: #243040;
+    --border-soft: #1c2634;
+    --text: #e6edf3;
+    --muted: #8b98ab;
+    --dim: #64748b;
+    --accent: #4f8cff;
+    --blue: #4f8cff;
+    --green: #3ddc97;
+    --amber: #ffb454;
+    --red: #ff5f6d;
+    --purple: #c792ea;
+    --radius: 12px;
+    --shadow: 0 8px 24px rgba(0, 0, 0, .35);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(1200px 600px at 82% -12%, rgba(79, 140, 255, .08), transparent 60%),
+      radial-gradient(900px 500px at -5% 0%, rgba(167, 107, 255, .06), transparent 55%);
+    background-attachment: fixed;
+    color: var(--text);
+    font: 13px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  button { font: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .mono, code { font-family: var(--mono); }
+  .dim { color: var(--dim); }
+  .dot-sep { color: var(--dim); }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #243040; border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; gap: 16px;
+    height: 54px; padding: 0 22px;
+    background: rgba(11, 15, 22, .82);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .brand { display: flex; align-items: center; gap: 9px; color: var(--text); font-weight: 700; }
+  .brand:hover { text-decoration: none; }
+  .brand-mark { width: 16px; height: 16px; border-radius: 5px; background: linear-gradient(135deg, #4f8cff, #a06bff); box-shadow: 0 0 12px rgba(79, 140, 255, .55); flex: 0 0 auto; }
+  .brand-name { letter-spacing: .3px; }
+  .brand-sub { color: var(--muted); font-weight: 500; font-size: 11.5px; }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .conn {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 11.5px; color: var(--muted);
+    padding: 4px 10px; border: 1px solid var(--border-soft); border-radius: 999px;
+    background: rgba(255, 255, 255, .02); white-space: nowrap;
+  }
+  .conn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); flex: 0 0 auto; }
+  .conn-live { color: #8ee6bd; border-color: rgba(61, 220, 151, .28); }
+  .conn-live .dot { background: var(--green); animation: livePulse 2s infinite; }
+  .conn-polling { color: #ffd08a; border-color: rgba(255, 180, 84, .28); }
+  .conn-polling .dot { background: var(--amber); animation: pulse 1.4s infinite; }
+  .conn-offline { color: #ff9aa3; border-color: rgba(255, 95, 109, .3); }
+  .conn-offline .dot { background: var(--red); }
+  .conn-connecting .dot { background: var(--dim); animation: pulse 1.4s infinite; }
+
+  .btn {
+    appearance: none; border: 1px solid var(--border);
+    background: rgba(255, 255, 255, .04); color: var(--text);
+    font-size: 12px; padding: 6px 12px; border-radius: 8px; cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+    white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) { background: rgba(255, 255, 255, .08); border-color: #33445a; }
+  .btn:disabled { cursor: default; opacity: .8; }
+  .btn.is-on { color: var(--green); border-color: rgba(61, 220, 151, .35); background: rgba(61, 220, 151, .08); }
+  .btn.is-off { color: var(--muted); }
+
+  /* ---------- page ---------- */
+  .page { max-width: 1440px; margin: 0 auto; padding: 20px 22px 56px; }
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 6px 0 18px; flex-wrap: wrap; }
+  .page-title { margin: 0; font-size: 19px; letter-spacing: .2px; }
+  .page-sub { margin: 5px 0 0; color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+
+  /* ---------- chips / pills ---------- */
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10.5px; line-height: 1.6; padding: 1px 7px;
+    border-radius: 6px; background: rgba(255, 255, 255, .045);
+    border: 1px solid var(--border-soft); color: var(--muted);
+    white-space: nowrap; max-width: 230px; overflow: hidden; text-overflow: ellipsis;
+    vertical-align: middle;
+  }
+  .chip.rev { color: #c8b3ff; border-color: rgba(167, 107, 255, .35); background: rgba(167, 107, 255, .1); font-weight: 600; }
+  .chip.kind-local { color: #8fc1ff; border-color: rgba(79, 140, 255, .35); background: rgba(79, 140, 255, .1); }
+  .chip.kind-remote { color: #c8b3ff; border-color: rgba(167, 107, 255, .35); background: rgba(167, 107, 255, .1); }
+  .chip.warn { color: #ffd08a; border-color: rgba(255, 180, 84, .3); background: rgba(255, 180, 84, .08); }
+  .chip.stat-info { color: #8fc1ff; border-color: rgba(79, 140, 255, .3); background: rgba(79, 140, 255, .08); }
+  .chip.stat-err { color: #ff9aa3; border-color: rgba(255, 95, 109, .3); background: rgba(255, 95, 109, .08); }
+  .chip.size { font-family: var(--mono); }
+  .chip.dep { color: #ffd08a; border-color: rgba(255, 180, 84, .3); background: rgba(255, 180, 84, .08); font-family: var(--mono); }
+  .chip.ev { font-family: var(--mono); max-width: 200px; }
+  .chip.ev-step { font-family: var(--mono); color: #a9b6c7; }
+  .chip.ag-kind { font-family: inherit; }
+  .chip.ag-kind-lead { color: #8fc1ff; border-color: rgba(79, 140, 255, .3); background: rgba(79, 140, 255, .08); }
+  .chip.ag-kind-job { color: #c792ea; border-color: rgba(199, 146, 234, .3); background: rgba(199, 146, 234, .08); }
+  .chip.delta-added { color: #8ee6bd; border-color: rgba(61, 220, 151, .3); background: rgba(61, 220, 151, .08); font-family: var(--mono); }
+  .chip.delta-removed { color: #ff9aa3; border-color: rgba(255, 95, 109, .3); background: rgba(255, 95, 109, .08); font-family: var(--mono); }
+  .chip.delta-changed { color: #ffd08a; border-color: rgba(255, 180, 84, .3); background: rgba(255, 180, 84, .08); font-family: var(--mono); }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10.5px; font-weight: 600; line-height: 1.7;
+    padding: 1px 8px; border-radius: 999px; border: 1px solid transparent;
+    white-space: nowrap; flex: 0 0 auto;
+  }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+  .pill-info { color: #8fc1ff; background: rgba(79, 140, 255, .12); border-color: rgba(79, 140, 255, .3); }
+  .pill-ok { color: #8ee6bd; background: rgba(61, 220, 151, .1); border-color: rgba(61, 220, 151, .28); }
+  .pill-warn { color: #ffd08a; background: rgba(255, 180, 84, .1); border-color: rgba(255, 180, 84, .28); }
+  .pill-err { color: #ff9aa3; background: rgba(255, 95, 109, .12); border-color: rgba(255, 95, 109, .3); }
+  .pill-idle { color: #9aa7b8; background: rgba(255, 255, 255, .05); border-color: var(--border-soft); }
+  .pill-dim { color: #6d7a8c; background: rgba(255, 255, 255, .03); border-color: var(--border-soft); }
+  .pulse-dot { animation: pulse 1.5s ease-in-out infinite; }
+
+  /* ---------- progress ---------- */
+  .progress { display: flex; flex-direction: column; gap: 5px; }
+  .progress-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); }
+  .progress-count { font-variant-numeric: tabular-nums; }
+  .progress-pct { color: #cfd9e6; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .progress-track { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, .07); overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .4s ease; }
+  .progress-lg .progress-track { height: 9px; }
+  .progress-lg .progress-meta { font-size: 11.5px; }
+
+  /* ---------- overview cards ---------- */
+  .project-card {
+    position: relative; display: flex; flex-direction: column; gap: 10px;
+    padding: 15px 16px 13px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    color: inherit; text-decoration: none; overflow: hidden;
+    transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+    min-width: 0;
+  }
+  .project-card::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: var(--accent); opacity: .95; }
+  .project-card::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); opacity: .35; }
+  .project-card:hover { transform: translateY(-1px); border-color: #33445a; box-shadow: 0 10px 26px rgba(0, 0, 0, .35); text-decoration: none; }
+  .pc-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .pc-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); flex: 0 0 auto; }
+  .pc-name { flex: 1 1 auto; min-width: 0; font-weight: 650; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pc-run { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .pc-run-title { flex: 1 1 auto; min-width: 0; font-size: 13px; color: #cfd9e6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pc-nodata { font-size: 12px; color: var(--dim); }
+  .pc-agents { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: rgba(255, 255, 255, .022); border: 1px solid var(--border-soft); border-radius: 8px; }
+  .pc-agents-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10.5px; letter-spacing: .2px; color: var(--dim); margin-bottom: 1px; }
+  .pc-agents-count { font-variant-numeric: tabular-nums; }
+  .pc-agent { display: flex; align-items: center; gap: 6px; font-size: 11.5px; min-width: 0; }
+  .pc-agent .dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+  .pc-agent-name { color: #cfd9e6; font-weight: 600; white-space: nowrap; }
+  .pc-agent-role { color: var(--muted); white-space: nowrap; }
+  .pc-agent-step { margin-left: auto; color: var(--blue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pc-agent-more, .pc-agent-none { font-size: 11px; color: var(--dim); }
+  .pc-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 2px; color: var(--muted); font-size: 11.5px; flex-wrap: wrap; }
+  .pc-last { display: inline-flex; align-items: baseline; gap: 3px; }
+  .pc-go { margin-left: auto; color: var(--accent); font-weight: 600; white-space: nowrap; }
+
+  /* ---------- cards ---------- */
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; min-width: 0; }
+  .card + .card { margin-top: 14px; }
+  .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .card-title { margin: 0; font-size: 13px; font-weight: 650; color: #dbe5f0; letter-spacing: .2px; }
+  .card-hint { margin-left: auto; color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .empty { padding: 26px 14px; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 10px; font-size: 12.5px; }
+
+  /* ---------- detail header ---------- */
+  .back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin: 2px 0 12px; padding: 3px 2px; }
+  .back-link:hover { color: var(--text); text-decoration: none; }
+  .detail-head { position: relative; padding-top: 16px; overflow: hidden; }
+  .detail-head::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: var(--accent); opacity: .9; }
+  .project-line { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .project-name { color: var(--text); font-weight: 600; }
+  .run-title { margin: 6px 0 0; font-size: 21px; line-height: 1.3; letter-spacing: .2px; overflow-wrap: anywhere; }
+  .run-goal { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-width: 900px; overflow-wrap: anywhere; }
+  .meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .meta-item { color: var(--dim); font-size: 11.5px; }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
+  .live .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  .detail-head .progress { margin-top: 12px; max-width: 780px; }
+
+  /* ---------- agent lanes ---------- */
+  .lanes { overflow-x: auto; }
+  .lane {
+    display: grid;
+    grid-template-columns: 170px 74px 84px minmax(220px, 1fr) 82px 96px 112px;
+    align-items: center; gap: 10px;
+    padding: 8px 10px; border-bottom: 1px solid var(--border-soft);
+    min-width: 900px; font-size: 12px;
+  }
+  .lane:last-child { border-bottom: 0; }
+  .lane-head { color: var(--dim); font-size: 10.5px; letter-spacing: .4px; padding-top: 0; padding-bottom: 6px; }
+  .lane-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lane:not(.lane-head):hover { background: rgba(255, 255, 255, .018); }
+  .lane.is-stalled { background: rgba(255, 95, 109, .05); }
+  .lane-name { display: flex; align-items: center; gap: 7px; min-width: 0; font-weight: 600; }
+  .lane-name .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .lane-name .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lane-role { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lane-step { min-width: 0; }
+  .lane-step-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .lane-step-title { color: #cfd9e6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lane-text { color: var(--muted); font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lane-time { color: #a9b6c7; font-family: var(--mono); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .lane-warn { font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .warn-warn { color: var(--amber); }
+  .warn-err { color: var(--red); }
+
+  /* ---------- step table ---------- */
+  .steps-wrap { overflow-x: auto; margin: 2px -4px 0; }
+  table.steps { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+  .steps thead th {
+    text-align: left; font-size: 10.5px; letter-spacing: .4px; color: var(--dim);
+    font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .steps th:nth-child(1) { width: 96px; }
+  .steps th:nth-child(2) { width: 62px; }
+  .steps th:nth-child(4) { width: 108px; }
+  .steps th:nth-child(5) { width: 74px; }
+  .steps th:nth-child(6) { width: 96px; }
+  .steps th:nth-child(7) { width: 178px; }
+  .steps td { padding: 7px 8px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  .steps tbody:last-child tr:last-child td { border-bottom: 0; }
+  .steps tr:not(.phase-row) td:first-child { border-left: 3px solid transparent; }
+  tr.row-in_progress td { background: rgba(79, 140, 255, .055); }
+  tr.row-blocked td { background: rgba(255, 180, 84, .06); }
+  tr.row-failed td { background: rgba(255, 95, 109, .06); }
+  tr.row-done td { background: rgba(61, 220, 151, .035); }
+  tr.row-skipped td, tr.row-superseded td { opacity: .6; }
+  tr.row-in_progress td:first-child { border-left-color: var(--blue); }
+  tr.row-blocked td:first-child { border-left-color: var(--amber); }
+  tr.row-done td:first-child { border-left-color: var(--green); }
+  tr.row-failed td:first-child { border-left-color: var(--red); }
+  tr.row-pending td:first-child { border-left-color: #5b6779; }
+  tr.row-skipped td:first-child, tr.row-superseded td:first-child { border-left-color: #5b6779; }
+  tr.phase-row td { background: rgba(79, 140, 255, .07); padding: 6px 10px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .phase-head { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 12px; }
+  .phase-head .dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+  .phase-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .phase-meta { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .ph-done { background: var(--green); }
+  .ph-in_progress { background: var(--blue); animation: pulse 1.5s infinite; }
+  .ph-blocked { background: var(--amber); }
+  .ph-failed { background: var(--red); }
+  .ph-pending { background: #64748b; }
+  .ph-skipped, .ph-superseded { background: #4b5565; }
+  .cell-id .mono { color: #a9b6c7; font-size: 11.5px; }
+  .step-title-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .step-title { color: #dbe5f0; overflow-wrap: anywhere; }
+  .step-title.has-accept { border-bottom: 1px dotted rgba(255, 255, 255, .18); cursor: help; }
+  .step-note { margin-top: 3px; color: var(--dim); font-size: 11px; font-style: italic; overflow-wrap: anywhere; }
+  .owner { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; white-space: nowrap; }
+  .owner .dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+  .owner-name { overflow: hidden; text-overflow: ellipsis; color: #c3cede; }
+  .dep-box, .ev-box { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-start; }
+  .time-val { color: #a9b6c7; font-variant-numeric: tabular-nums; }
+
+  /* ---------- bottom panels ---------- */
+  .bottom-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; }
+  .bottom-grid .card { margin-top: 0; }
+  .ev-list { display: flex; flex-direction: column; }
+  .ev-row {
+    display: grid; grid-template-columns: 62px 108px 68px 46px minmax(0, 1fr);
+    gap: 8px; align-items: baseline;
+    padding: 5px 0; border-bottom: 1px dashed var(--border-soft); font-size: 11.5px;
+  }
+  .ev-row:last-child { border-bottom: 0; }
+  .ev-row:hover { background: rgba(255, 255, 255, .02); }
+  .ev-time { color: var(--dim); font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ev-agent { display: flex; align-items: center; gap: 5px; min-width: 0; color: #c3cede; }
+  .ev-agent .dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+  .ev-agent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ev-badge {
+    justify-self: start; font-size: 10px; line-height: 1.7; padding: 0 6px; border-radius: 5px;
+    border: 1px solid var(--border-soft); background: rgba(255, 255, 255, .04); color: var(--muted);
+    white-space: nowrap;
+  }
+  .ev-note { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .evt-info .ev-badge { color: #8fc1ff; background: rgba(79, 140, 255, .12); border-color: rgba(79, 140, 255, .3); }
+  .evt-ok .ev-badge { color: #8ee6bd; background: rgba(61, 220, 151, .1); border-color: rgba(61, 220, 151, .28); }
+  .evt-warn .ev-badge { color: #ffd08a; background: rgba(255, 180, 84, .1); border-color: rgba(255, 180, 84, .28); }
+  .evt-err .ev-badge { color: #ff9aa3; background: rgba(255, 95, 109, .12); border-color: rgba(255, 95, 109, .3); }
+  .evt-purple .ev-badge { color: #c8b3ff; background: rgba(167, 107, 255, .1); border-color: rgba(167, 107, 255, .3); }
+  .evt-dim .ev-badge { color: #7c8a9d; }
+  .chg-list { display: flex; flex-direction: column; }
+  .chg-row { padding: 6px 0; border-bottom: 1px dashed var(--border-soft); font-size: 11.5px; }
+  .chg-row:last-child { border-bottom: 0; }
+  .chg-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .chg-time { color: var(--dim); font-family: var(--mono); font-size: 11px; }
+  .chg-by { color: var(--muted); }
+  .chg-reason { margin-top: 3px; color: #cfd9e6; overflow-wrap: anywhere; }
+  .chg-deltas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+
+  /* ---------- loading / empty / states ---------- */
+  .loading { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16vh 20px; color: var(--muted); text-align: center; }
+  .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .15); border-top-color: var(--blue); animation: spin .9s linear infinite; }
+  .loading .state-title { margin: 0; }
+  .loading .state-msg { margin: 0; max-width: 460px; }
+  .state-card { max-width: 580px; margin: 9vh auto 0; text-align: center; }
+  .state-title { margin: 0 0 8px; font-size: 18px; }
+  .state-msg { color: var(--muted); margin: 0 0 16px; overflow-wrap: anywhere; }
+  .state-card .btn { display: inline-block; text-decoration: none; }
+
+  /* ---------- toasts ---------- */
+  .toasts { position: fixed; right: 16px; bottom: 16px; z-index: 100; display: flex; flex-direction: column; gap: 8px; max-width: min(360px, calc(100vw - 32px)); }
+  .toast {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 9px 10px 9px 12px; background: #182130;
+    border: 1px solid var(--border); border-left: 3px solid var(--blue);
+    border-radius: 8px; box-shadow: var(--shadow);
+    font-size: 12px; color: #dbe5f0; opacity: 0; transform: translateY(6px);
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .toast.show { opacity: 1; transform: none; }
+  .toast-warn { border-left-color: var(--amber); }
+  .toast-err { border-left-color: var(--red); }
+  .toast-msg { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .toast-x { appearance: none; background: transparent; border: 0; color: var(--dim); font-size: 14px; line-height: 1; cursor: pointer; padding: 0 2px; }
+  .toast-x:hover { color: var(--text); }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  @keyframes livePulse {
+    0% { box-shadow: 0 0 0 0 rgba(61, 220, 151, .5); }
+    70% { box-shadow: 0 0 0 6px rgba(61, 220, 151, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(61, 220, 151, 0); }
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1180px) {
+    .bottom-grid { grid-template-columns: minmax(0, 1fr); }
+    .lane { grid-template-columns: 152px 68px 78px minmax(180px, 1fr) 76px 90px 104px; min-width: 840px; }
+  }
+  @media (max-width: 900px) {
+    .topbar { padding: 0 12px; }
+    .page { padding: 14px 12px 40px; }
+    .cards { grid-template-columns: minmax(0, 1fr); }
+    .brand-sub { display: none; }
+    .ev-row { grid-template-columns: 56px 84px 60px 42px minmax(0, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  }
+</style>
+</head>
+<body>
+<div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+<div id="app" class="app"></div>
+<script>
+'use strict';
+(function () {
+  /* ============================================================
+   * live-progress board · single-file dashboard
+   * vanilla JS, no external resources, same-origin /api/* only
+   * ============================================================ */
+
+  /* ---------- tiny data helpers ---------- */
+  function isObj(v) { return v != null && typeof v === 'object' && !Array.isArray(v); }
+  function arr(v) { return Array.isArray(v) ? v : []; }
+  function list(v) {
+    if (Array.isArray(v)) return v.filter(function (x) { return x != null && x !== ''; });
+    if (typeof v === 'string') return v ? [v] : [];
+    if (isObj(v)) return [v];
+    return [];
+  }
+  function str(v) { return v == null ? '' : String(v); }
+  function num(v) {
+    var n = typeof v === 'number' ? v : parseFloat(v);
+    return isFinite(n) ? n : null;
+  }
+  function clamp(n, lo, hi) {
+    var x = num(n);
+    if (x == null) x = lo;
+    return Math.min(hi, Math.max(lo, x));
+  }
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+  function parseTime(v) {
+    if (typeof v !== 'string' || !v) return null;
+    var t = Date.parse(v);
+    return isFinite(t) ? t : null;
+  }
+  function safeColor(c, fallback) {
+    var s = str(c).trim();
+    if (/^#[0-9a-fA-F]{3,8}$/.test(s)) return s;
+    return fallback || '';
+  }
+
+  /* ---------- DOM helpers (textContent only, never innerHTML) ---------- */
+  function mk(tag, cls, text) {
+    var el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text != null) el.textContent = String(text);
+    return el;
+  }
+  function tx(el, t) { if (el) el.textContent = t == null ? '' : String(t); return el; }
+  function span(cls, text) { return mk('span', cls, text); }
+  function add(el) {
+    for (var i = 1; i < arguments.length; i++) {
+      var c = arguments[i];
+      if (c) el.appendChild(c);
+    }
+    return el;
+  }
+  function clearNode(node) {
+    if (typeof node.replaceChildren === 'function') { node.replaceChildren(); return; }
+    while (node.firstChild) node.removeChild(node.firstChild);
+  }
+  function cardHead(title, hint) {
+    var head = mk('div', 'card-head');
+    head.appendChild(mk('h2', 'card-title', title));
+    if (hint) head.appendChild(mk('span', 'card-hint', hint));
+    return head;
+  }
+  function emptyBox(message) { return mk('div', 'empty', message); }
+  function sep() { return mk('span', 'dot-sep', '·'); }
+
+  /* ---------- time formatting ---------- */
+  function fmtClock(ts) {
+    var d = new Date(ts);
+    return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+  }
+  function fmtDateTime(ts) {
+    if (ts == null) return '';
+    var d = new Date(ts);
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' +
+      pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+  }
+  function fmtDur(ms) {
+    if (ms == null || !isFinite(ms) || ms < 0) return '—';
+    var s = Math.floor(ms / 1000);
+    if (s < 60) return s + 's';
+    var m = Math.floor(s / 60), rs = s % 60;
+    if (m < 60) return m + 'm' + (rs ? rs + 's' : '');
+    var h = Math.floor(m / 60), rm = m % 60;
+    return h + 'h' + (rm ? (rm < 10 ? '0' : '') + rm + 'm' : '');
+  }
+  function relAge(sec) {
+    var s = Math.max(0, Math.floor(sec));
+    if (s < 60) return s + 's 前';
+    if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's 前';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm 前';
+    return Math.floor(s / 86400) + 'd 前';
+  }
+
+  /* ---------- status dictionaries ---------- */
+  var RUN_STATUS = {
+    running: ['运行中', 'info'],
+    in_progress: ['进行中', 'info'],
+    working: ['运行中', 'info'],
+    completed: ['已完成', 'ok'],
+    done: ['已完成', 'ok'],
+    failed: ['失败', 'err'],
+    error: ['失败', 'err'],
+    timeout: ['超时', 'err'],
+    blocked: ['阻塞', 'warn'],
+    stalled: ['停滞', 'warn'],
+    pending: ['待开始', 'idle'],
+    queued: ['排队中', 'idle'],
+    cancelled: ['已取消', 'idle'],
+    canceled: ['已取消', 'idle']
+  };
+  var AGENT_STATUS = {
+    working: ['工作中', 'info'],
+    idle: ['空闲', 'idle'],
+    blocked: ['阻塞', 'warn'],
+    done: ['完成', 'ok'],
+    failed: ['失败', 'err']
+  };
+  var STEP_STATUS = {
+    pending: ['待开始', 'pending'],
+    in_progress: ['进行中', 'running'],
+    blocked: ['阻塞', 'blocked'],
+    done: ['完成', 'done'],
+    failed: ['失败', 'failed'],
+    skipped: ['已跳过', 'skipped'],
+    superseded: ['已取代', 'superseded']
+  };
+  var EVENT_TYPE = {
+    init: ['初始化', 'info'],
+    start: ['开始', 'info'],
+    done: ['完成', 'ok'],
+    success: ['完成', 'ok'],
+    fail: ['失败', 'err'],
+    failed: ['失败', 'err'],
+    block: ['阻塞', 'warn'],
+    blocked: ['阻塞', 'warn'],
+    skip: ['跳过', 'dim'],
+    skipped: ['跳过', 'dim'],
+    resume: ['恢复', 'info'],
+    heartbeat: ['心跳', 'dim'],
+    plan_revise: ['计划修订', 'purple'],
+    revise: ['计划修订', 'purple'],
+    notify: ['通知', 'purple'],
+    notification: ['通知', 'purple'],
+    close: ['结束', 'ok'],
+    note: ['备注', 'dim']
+  };
+  var CONN_META = {
+    connecting: ['连接中', 'conn-connecting', '正在连接进度服务'],
+    live: ['实时连接', 'conn-live', '实时推送已连接'],
+    polling: ['轮询中 · 3s', 'conn-polling', '实时推送中断，正在每 3 秒轮询'],
+    offline: ['离线', 'conn-offline', '无法连接到进度服务']
+  };
+
+  function statusMeta(map, value) {
+    var raw = str(value);
+    return map[raw] || [raw || '未知', 'idle'];
+  }
+  function statusLabel(map, value) { return statusMeta(map, value)[0]; }
+
+  /* ---------- shared app state ---------- */
+  var state = {
+    snapshot: null,
+    receivedAt: 0,
+    route: null,
+    routeKey: '',
+    conn: 'connecting',
+    es: null,
+    esOpen: false,
+    reconnectAttempt: 0,
+    reconnectTimer: null,
+    pollTimer: null,
+    polling: false,
+    pollFails: 0,
+    clientId: makeClientId(),
+    notifIds: new Set()
+  };
+  var tickers = [];
+  var connEls = [];
+  var notifyBtns = [];
+
+  function makeClientId() {
+    try {
+      if (typeof crypto !== 'undefined' && crypto && typeof crypto.randomUUID === 'function') {
+        return 'lp-' + crypto.randomUUID();
+      }
+    } catch (e) { /* ignore */ }
+    return 'lp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  /* ---------- 1s tickers: only text nodes change ---------- */
+  function ticker(el, fn) {
+    if (!el) return el;
+    tickers.push({ el: el, fn: fn });
+    try {
+      var v = fn(Date.now());
+      if (typeof v === 'string') el.textContent = v;
+    } catch (e) { /* ignore */ }
+    return el;
+  }
+  function runTicks() {
+    if (!tickers.length) return;
+    var now = Date.now();
+    var kept = [];
+    for (var i = 0; i < tickers.length; i++) {
+      var t = tickers[i];
+      if (!t || !t.el || !t.el.isConnected) continue;
+      var v;
+      try { v = t.fn(now); } catch (e) { continue; }
+      if (typeof v === 'string' && t.el.textContent !== v) t.el.textContent = v;
+      kept.push(t);
+    }
+    tickers = kept;
+  }
+
+  /* ---------- age helpers ---------- */
+  function baseAge(obj) {
+    var direct = num(obj && obj.lastSeenAgoSec);
+    if (direct != null) return direct;
+    var ts = parseTime(obj && obj.lastSeen);
+    if (ts != null) return Math.max(0, (state.receivedAt - ts) / 1000);
+    return null;
+  }
+  function agoEl(iso, fallbackSec) {
+    var el = mk('span', 'age');
+    var ts = parseTime(iso);
+    var base = null;
+    if (ts != null) base = Math.max(0, (state.receivedAt - ts) / 1000);
+    else {
+      var fb = num(fallbackSec);
+      if (fb != null) base = fb;
+    }
+    if (base == null) { el.textContent = '—'; return el; }
+    return ticker(el, function (now) { return relAge(base + (now - state.receivedAt) / 1000); });
+  }
+  function snapshotAgeEl() {
+    var iso = str(state.snapshot && state.snapshot.generatedAt);
+    return agoEl(iso, 0);
+  }
+  function generatedAtText() {
+    var ts = parseTime(str(state.snapshot && state.snapshot.generatedAt));
+    if (ts == null) ts = state.receivedAt || null;
+    return ts ? fmtDateTime(ts) : '';
+  }
+
+  /* ---------- pills / badges ---------- */
+  function statusPill(map, value) {
+    var raw = str(value);
+    var meta = statusMeta(map, raw);
+    var el = mk('span', 'pill pill-' + meta[1]);
+    var dot = mk('span', 'dot');
+    if (raw === 'in_progress' || raw === 'running' || raw === 'working') dot.classList.add('pulse-dot');
+    el.appendChild(dot);
+    el.appendChild(mk('span', 'pill-label', meta[0]));
+    if (raw) el.title = '状态：' + raw;
+    return el;
+  }
+  function revChip(rev) {
+    var n = num(rev);
+    if (n == null) return null;
+    return mk('span', 'chip rev', '计划 v' + Math.round(n));
+  }
+  function kindBadge(kind) {
+    var raw = str(kind);
+    if (!raw) return null;
+    var local = raw === 'local';
+    var ingest = raw === 'ingest' || raw === 'remote';
+    var label = local ? '本地' : (ingest ? '远程' : raw);
+    var cls = 'chip kind ' + (local ? 'kind-local' : (ingest ? 'kind-remote' : ''));
+    var el = mk('span', cls, label);
+    el.title = '项目类型：' + raw;
+    return el;
+  }
+  function agentKindBadge(kind) {
+    var k = str(kind);
+    if (k !== 'lead' && k !== 'job') return null;
+    var el = mk('span', 'chip ag-kind ' + (k === 'lead' ? 'ag-kind-lead' : 'ag-kind-job'), k === 'lead' ? '主控' : '后台');
+    el.title = k === 'lead' ? '主控 Agent' : '后台任务 Agent';
+    return el;
+  }
+  function statChip(text, cls) { return mk('span', 'chip ' + cls, text); }
+  function deltaChip(kind, id) {
+    var sign = kind === 'added' ? '+' : (kind === 'removed' ? '-' : '~');
+    return mk('span', 'chip delta-' + kind, sign + id);
+  }
+
+  /* ---------- snapshot accessors ---------- */
+  function getProjects() {
+    var snap = state.snapshot;
+    return snap ? arr(snap.projects) : [];
+  }
+  function findProject(projectId) {
+    var pid = str(projectId);
+    var projects = getProjects();
+    for (var i = 0; i < projects.length; i++) {
+      if (isObj(projects[i]) && str(projects[i].id) === pid) return projects[i];
+    }
+    return null;
+  }
+  function findRun(project, runId) {
+    var rid = str(runId);
+    var runs = arr(project && project.runs);
+    for (var i = 0; i < runs.length; i++) {
+      if (isObj(runs[i]) && str(runs[i].id) === rid) return runs[i];
+    }
+    return null;
+  }
+  function latestRun(project) {
+    var runs = arr(project && project.runs);
+    var best = null, bestTs = -1;
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i];
+      if (!isObj(r)) continue;
+      var ts = parseTime(r.startedAt);
+      if (ts == null) ts = parseTime(r.updatedAt);
+      if (ts == null) ts = 0;
+      if (!best || ts > bestTs) { best = r; bestTs = ts; }
+    }
+    return best || runs[0] || null;
+  }
+  function stepIndex(run) {
+    var map = new Map();
+    var steps = arr(run && run.steps);
+    for (var i = 0; i < steps.length; i++) {
+      var id = str(steps[i] && steps[i].id);
+      if (id) map.set(id, steps[i]);
+    }
+    return map;
+  }
+  function agentIndex(run) {
+    var map = new Map();
+    var agents = arr(run && run.agents);
+    for (var i = 0; i < agents.length; i++) {
+      var id = str(agents[i] && agents[i].id);
+      if (id) map.set(id, agents[i]);
+    }
+    return map;
+  }
+  function progressOf(run) {
+    var p = run && run.progress;
+    if (isObj(p)) {
+      var done = num(p.done) || 0;
+      var total = num(p.total) || 0;
+      var percent = num(p.percent);
+      if (percent == null) percent = total > 0 ? Math.round(done / total * 100) : 0;
+      return {
+        done: done,
+        total: total,
+        percent: clamp(percent, 0, 100),
+        inProgress: num(p.inProgress),
+        failed: num(p.failed)
+      };
+    }
+    var steps = arr(run && run.steps);
+    if (!steps.length) return { done: 0, total: 0, percent: 0, inProgress: null, failed: null };
+    var counted = 0, don = 0;
+    for (var i = 0; i < steps.length; i++) {
+      var s = str(steps[i] && steps[i].status);
+      if (s === 'skipped' || s === 'superseded') continue;
+      counted++;
+      if (s === 'done') don++;
+    }
+    return {
+      done: don,
+      total: counted,
+      percent: counted ? Math.round(don / counted * 100) : 0,
+      inProgress: null,
+      failed: null
+    };
+  }
+  function countDone(steps) {
+    var n = 0;
+    for (var i = 0; i < steps.length; i++) if (str(steps[i] && steps[i].status) === 'done') n++;
+    return n;
+  }
+  function groupSteps(run) {
+    var steps = arr(run.steps);
+    var phases = arr(run.phases);
+    var byId = stepIndex(run);
+    var used = new Set();
+    var groups = [];
+    var i, j, k;
+    for (i = 0; i < phases.length; i++) {
+      var ph = phases[i] || {};
+      var ids = list(ph.stepIds);
+      var groupStepsList = [];
+      for (j = 0; j < ids.length; j++) {
+        var id = str(ids[j]);
+        var st = byId.get(id);
+        if (st && !used.has(id)) { used.add(id); groupStepsList.push(st); }
+      }
+      for (k = 0; k < steps.length; k++) {
+        var s = steps[k];
+        var sid = str(s && s.id);
+        if (sid && !used.has(sid) && str(s && s.phaseId) === str(ph.id)) {
+          used.add(sid);
+          groupStepsList.push(s);
+        }
+      }
+      groups.push({ phase: ph, steps: groupStepsList });
+    }
+    var extra = [];
+    for (i = 0; i < steps.length; i++) {
+      var sid2 = str(steps[i] && steps[i].id);
+      if (sid2 && used.has(sid2)) continue;
+      if (sid2) used.add(sid2);
+      extra.push(steps[i]);
+    }
+    if (extra.length) groups.push({ phase: null, steps: extra });
+    return groups;
+  }
+
+  /* ---------- common components ---------- */
+  function progressBar(p, big) {
+    var wrap = mk('div', 'progress' + (big ? ' progress-lg' : ''));
+    var meta = mk('div', 'progress-meta');
+    meta.appendChild(span('progress-count', '完成 ' + p.done + ' / ' + p.total));
+    meta.appendChild(span('progress-pct', Math.round(p.percent) + '%'));
+    var track = mk('div', 'progress-track');
+    var fill = mk('div', 'progress-fill');
+    fill.style.width = clamp(p.percent, 0, 100) + '%';
+    track.appendChild(fill);
+    wrap.appendChild(meta);
+    wrap.appendChild(track);
+    return wrap;
+  }
+  function evidenceChip(path) {
+    var el = mk('span', 'chip ev', path);
+    el.title = path;
+    return el;
+  }
+  function depChip(id, byId) {
+    var st = byId ? byId.get(id) : null;
+    var el = mk('span', 'chip dep', id);
+    if (st) el.title = '依赖步骤：' + (str(st.title) || id) + ' · ' + statusLabel(STEP_STATUS, st.status);
+    else el.title = '依赖步骤 ' + id;
+    return el;
+  }
+  function ownerCell(ownerId, agents) {
+    var el = mk('span', 'owner');
+    var id = str(ownerId);
+    if (!id) { el.appendChild(span('dim', '—')); return el; }
+    var ag = agents ? agents.get(id) : null;
+    var dot = mk('span', 'dot');
+    dot.style.background = safeColor(ag && ag.color, '#8b98ab');
+    el.appendChild(dot);
+    el.appendChild(span('owner-name', ag ? (str(ag.name) || id) : id));
+    if (ag && str(ag.role)) el.title = '角色：' + str(ag.role);
+    return el;
+  }
+  function elapsedCell(step) {
+    var el = mk('span', 'mono time-val');
+    var status = str(step.status);
+    var started = parseTime(step.startedAt);
+    var staticMs = num(step.elapsedMs);
+    if (status === 'in_progress' || status === 'running') {
+      if (started != null) return ticker(el, function (now) { return fmtDur(Math.max(0, now - started)); });
+      el.textContent = staticMs != null ? fmtDur(staticMs) : '—';
+      return el;
+    }
+    var ms = staticMs;
+    if (ms == null && started != null) {
+      var ended = parseTime(step.endedAt);
+      if (ended != null) ms = ended - started;
+    }
+    el.textContent = ms != null ? fmtDur(ms) : '—';
+    return el;
+  }
+  function phaseRow(phase, steps) {
+    var tr = mk('tr', 'phase-row');
+    var td = mk('td');
+    td.colSpan = 7;
+    var box = mk('div', 'phase-head');
+    var status = str(phase && phase.status);
+    box.appendChild(mk('span', 'dot ph-' + (STEP_STATUS[status] ? status : 'pending')));
+    box.appendChild(span('phase-title', str(phase && phase.title) || '未命名阶段'));
+    var done = num(phase && phase.done);
+    if (done == null) done = countDone(steps);
+    var total = num(phase && phase.total);
+    if (total == null) total = steps.length;
+    var meta = mk('span', 'phase-meta');
+    meta.appendChild(span('', done + ' / ' + total));
+    meta.appendChild(span('chip', statusLabel(STEP_STATUS, status)));
+    box.appendChild(meta);
+    td.appendChild(box);
+    tr.appendChild(td);
+    return tr;
+  }
+  function stepRow(step, byId, agents) {
+    var status = str(step.status) || 'pending';
+    var tr = mk('tr', 'row-' + status);
+
+    var tdStatus = mk('td', 'cell-status');
+    tdStatus.appendChild(statusPill(STEP_STATUS, status));
+    tr.appendChild(tdStatus);
+
+    var id = str(step.id);
+    var tdId = mk('td', 'cell-id');
+    tdId.appendChild(mk('code', 'mono', id || '—'));
+    tr.appendChild(tdId);
+
+    var tdTitle = mk('td', 'cell-title');
+    var titleLine = mk('div', 'step-title-line');
+    var titleEl = mk('span', 'step-title', str(step.title) || '未命名步骤');
+    var acceptance = str(step.acceptance);
+    if (acceptance) {
+      titleEl.title = '验收标准：' + acceptance;
+      titleEl.classList.add('has-accept');
+    }
+    titleLine.appendChild(titleEl);
+    if (str(step.size)) titleLine.appendChild(mk('span', 'chip size', str(step.size)));
+    tdTitle.appendChild(titleLine);
+    if (str(step.note)) tdTitle.appendChild(mk('div', 'step-note', '备注：' + str(step.note)));
+    tr.appendChild(tdTitle);
+
+    var tdOwner = mk('td', 'cell-owner');
+    tdOwner.appendChild(ownerCell(step.owner, agents));
+    tr.appendChild(tdOwner);
+
+    var tdElapsed = mk('td', 'cell-elapsed');
+    tdElapsed.appendChild(elapsedCell(step));
+    tr.appendChild(tdElapsed);
+
+    var tdDep = mk('td', 'cell-dep');
+    var depBox = mk('div', 'dep-box');
+    var deps = list(step.blockedBy);
+    if (deps.length) {
+      for (var i = 0; i < deps.length; i++) depBox.appendChild(depChip(str(deps[i]), byId));
+    } else {
+      depBox.appendChild(span('dim', '—'));
+    }
+    tdDep.appendChild(depBox);
+    tr.appendChild(tdDep);
+
+    var tdEv = mk('td', 'cell-ev');
+    var evBox = mk('div', 'ev-box');
+    var evs = list(step.evidence);
+    if (evs.length) {
+      for (var j = 0; j < evs.length; j++) evBox.appendChild(evidenceChip(str(evs[j])));
+    } else {
+      evBox.appendChild(span('dim', '—'));
+    }
+    tdEv.appendChild(evBox);
+    tr.appendChild(tdEv);
+
+    return tr;
+  }
+
+  /* ============================================================
+   * views
+   * ============================================================ */
+
+  /* ---------- top bar ---------- */
+  function topbar() {
+    var bar = mk('header', 'topbar');
+    var brand = mk('a', 'brand');
+    brand.href = '/';
+    brand.setAttribute('data-nav', '');
+    brand.appendChild(mk('span', 'brand-mark'));
+    brand.appendChild(mk('span', 'brand-name', 'live-progress'));
+    brand.appendChild(mk('small', 'brand-sub', '任务进度看板'));
+    bar.appendChild(brand);
+
+    var right = mk('div', 'topbar-right');
+    var conn = mk('span', 'conn');
+    conn.appendChild(mk('span', 'dot'));
+    var label = mk('span', 'conn-label');
+    conn.appendChild(label);
+    connEls.push({ el: conn, label: label });
+    right.appendChild(conn);
+    right.appendChild(notifyButton());
+    bar.appendChild(right);
+    return bar;
+  }
+
+  /* ---------- loading / offline / missing ---------- */
+  function loadingView() {
+    var box = mk('div', 'loading');
+    box.appendChild(mk('div', 'spinner'));
+    box.appendChild(span('loading-text', '正在连接进度服务…'));
+    return box;
+  }
+  function offlineView() {
+    var box = mk('div', 'loading');
+    box.appendChild(mk('h1', 'state-title', '无法连接到进度服务'));
+    box.appendChild(span('state-msg', '请确认 board.py serve 正在运行。页面会自动重试，也可以手动重试。'));
+    var btn = mk('button', 'btn', '立即重试');
+    btn.type = 'button';
+    btn.addEventListener('click', function () {
+      fetchState().catch(function () {
+        setConn('offline');
+        toast('仍然无法连接到进度服务', 'err');
+      });
+    });
+    box.appendChild(btn);
+    return box;
+  }
+  function stateView(title, message) {
+    var page = mk('div', 'page');
+    page.appendChild(backLink());
+    var card = mk('section', 'card state-card');
+    card.appendChild(mk('h1', 'state-title', title));
+    card.appendChild(mk('p', 'state-msg', message));
+    var home = mk('a', 'btn', '返回总览');
+    home.href = '/';
+    home.setAttribute('data-nav', '');
+    card.appendChild(home);
+    page.appendChild(card);
+    return page;
+  }
+  function unknownView(path) {
+    return stateView('页面不存在', '无法识别的路径「' + str(path) + '」。请返回总览重新进入。');
+  }
+  function backLink() {
+    var a = mk('a', 'back-link', '← 返回总览');
+    a.href = '/';
+    a.setAttribute('data-nav', '');
+    return a;
+  }
+
+  /* ---------- overview ---------- */
+  function overviewView() {
+    var projects = getProjects();
+    var page = mk('div', 'page');
+    page.appendChild(overviewHead(projects));
+    if (!projects.length) {
+      page.appendChild(emptyBox('还没有项目。用 board.py init 注册项目后，项目卡片会自动出现在这里。'));
+      return page;
+    }
+    var cards = mk('div', 'cards');
+    for (var i = 0; i < projects.length; i++) {
+      if (isObj(projects[i])) cards.appendChild(projectCard(projects[i]));
+    }
+    if (!cards.children.length) page.appendChild(emptyBox('还没有可展示的项目。'));
+    else page.appendChild(cards);
+    return page;
+  }
+  function overviewHead(projects) {
+    var head = mk('div', 'page-head');
+    var left = mk('div', 'page-head-left');
+    left.appendChild(mk('h1', 'page-title', '任务进度总览'));
+    var sub = mk('p', 'page-sub');
+    var running = 0, totalRuns = 0, i, j;
+    for (i = 0; i < projects.length; i++) {
+      var runs = arr(projects[i] && projects[i].runs);
+      totalRuns += runs.length;
+      for (j = 0; j < runs.length; j++) {
+        var st = str(runs[j] && runs[j].status);
+        if (st === 'running' || st === 'in_progress') running++;
+      }
+    }
+    sub.appendChild(span('', '共 ' + projects.length + ' 个项目'));
+    sub.appendChild(sep());
+    sub.appendChild(span('', totalRuns + ' 次运行 · ' + running + ' 个进行中'));
+    sub.appendChild(sep());
+    sub.appendChild(span('', '更新于 '));
+    sub.appendChild(snapshotAgeEl());
+    left.appendChild(sub);
+    head.appendChild(left);
+    return head;
+  }
+  function applyAccent(el, color) {
+    var c = safeColor(color, '');
+    if (c) el.style.setProperty('--accent', c);
+    return el;
+  }
+  function projectCard(project) {
+    var run = latestRun(project);
+    var pid = str(project.id);
+    var card = mk('a', 'project-card');
+    card.href = '/p/' + encodeURIComponent(pid);
+    card.setAttribute('data-nav', '');
+    applyAccent(card, project.color);
+
+    var head = mk('div', 'pc-head');
+    head.appendChild(mk('span', 'pc-dot'));
+    head.appendChild(mk('span', 'pc-name', str(project.name) || pid || '未命名项目'));
+    var kb = kindBadge(project.kind);
+    if (kb) head.appendChild(kb);
+    var src = str(project.sourceStatus);
+    if (src && src !== 'ok') head.appendChild(mk('span', 'chip warn', '数据源 ' + src));
+    card.appendChild(head);
+
+    var runLine = mk('div', 'pc-run');
+    if (run) {
+      runLine.appendChild(mk('span', 'pc-run-title', str(run.title) || '未命名运行'));
+      runLine.appendChild(statusPill(RUN_STATUS, run.status));
+    } else {
+      runLine.appendChild(span('pc-run-title dim', '暂无运行记录'));
+    }
+    card.appendChild(runLine);
+
+    if (run) card.appendChild(progressBar(progressOf(run), false));
+    else card.appendChild(span('pc-nodata', '暂无进度数据'));
+
+    var agentsWrap = mk('div', 'pc-agents');
+    var agents = arr(run && run.agents);
+    var active = [];
+    for (var i = 0; i < agents.length; i++) {
+      var ast = str(agents[i] && agents[i].status);
+      if (ast === 'working' || ast === 'blocked') active.push(agents[i]);
+    }
+    var agHead = mk('div', 'pc-agents-head');
+    agHead.appendChild(span('', '活跃 Agent'));
+    agHead.appendChild(span('pc-agents-count', active.length + ' / ' + agents.length));
+    agentsWrap.appendChild(agHead);
+    var stepsById = stepIndex(run);
+    if (active.length) {
+      var shown = active.slice(0, 3);
+      for (var j = 0; j < shown.length; j++) agentsWrap.appendChild(cardAgentRow(shown[j], stepsById));
+      if (active.length > shown.length) {
+        agentsWrap.appendChild(span('pc-agent-more', '还有 ' + (active.length - shown.length) + ' 个活跃 Agent'));
+      }
+    } else {
+      agentsWrap.appendChild(span('pc-agent-none', agents.length ? '暂无活跃 Agent' : '暂无 Agent'));
+    }
+    card.appendChild(agentsWrap);
+
+    var foot = mk('div', 'pc-foot');
+    var rc = revChip(run && run.revision);
+    if (rc) foot.appendChild(rc);
+    var last = mk('span', 'pc-last');
+    last.appendChild(span('pc-last-label', '最后活动 '));
+    last.appendChild(agoEl(str(project.lastActivityAt) || str(run && run.updatedAt), null));
+    foot.appendChild(last);
+    if (arr(project.runs).length > 1) {
+      foot.appendChild(mk('span', 'chip', '共 ' + arr(project.runs).length + ' 次运行'));
+    }
+    foot.appendChild(span('pc-go', '查看 →'));
+    card.appendChild(foot);
+
+    return card;
+  }
+  function cardAgentRow(agent, stepsById) {
+    var row = mk('div', 'pc-agent');
+    var dot = mk('span', 'dot');
+    dot.style.background = safeColor(agent.color, '#8b98ab');
+    row.appendChild(dot);
+    row.appendChild(span('pc-agent-name', str(agent.name) || str(agent.id) || 'agent'));
+    if (str(agent.role)) row.appendChild(span('pc-agent-role', str(agent.role)));
+    var stepId = str(agent.currentStep);
+    var title = '';
+    if (stepId && stepsById.has(stepId)) title = str(stepsById.get(stepId).title);
+    var stepText = title ? stepId + ' · ' + title : stepId;
+    if (!stepText) stepText = str(agent.currentText) || '—';
+    row.appendChild(span('pc-agent-step', stepText));
+    row.title = stepText;
+    return row;
+  }
+
+  /* ---------- detail ---------- */
+  function detailView(route) {
+    var project = findProject(route.projectId);
+    if (!project) {
+      return stateView('找不到项目', '项目「' + str(route.projectId) + '」不存在，或已被从注册表中移除。');
+    }
+    var projectName = str(project.name) || str(project.id) || '该项目';
+    var run = route.runId ? findRun(project, route.runId) : latestRun(project);
+    if (!run) {
+      if (route.runId) {
+        return stateView('找不到运行记录', '项目「' + projectName + '」中不存在运行「' + str(route.runId) + '」。');
+      }
+      return pageForProject(project, '暂无运行记录', '项目「' + projectName + '」还没有任何运行记录。');
+    }
+    var page = mk('div', 'page');
+    page.appendChild(backLink());
+    page.appendChild(detailHeader(project, run));
+    page.appendChild(agentLanesCard(run));
+    page.appendChild(stepsCard(run));
+    var bottom = mk('div', 'bottom-grid');
+    bottom.appendChild(eventsCard(run));
+    bottom.appendChild(changesCard(run));
+    page.appendChild(bottom);
+    return page;
+  }
+  function pageForProject(project, title, message) {
+    var page = mk('div', 'page');
+    page.appendChild(backLink());
+    var card = mk('section', 'card state-card');
+    card.appendChild(mk('h1', 'state-title', title));
+    card.appendChild(mk('p', 'state-msg', message));
+    var link = mk('a', 'btn', '查看项目最新运行');
+    link.href = '/p/' + encodeURIComponent(str(project.id));
+    link.setAttribute('data-nav', '');
+    card.appendChild(link);
+    page.appendChild(card);
+    return page;
+  }
+  function detailHeader(project, run) {
+    var head = mk('section', 'card detail-head');
+    applyAccent(head, project.color);
+
+    var line = mk('div', 'project-line');
+    line.appendChild(mk('span', 'pc-dot'));
+    var plink = mk('a', 'project-name', str(project.name) || str(project.id) || '未命名项目');
+    plink.href = '/p/' + encodeURIComponent(str(project.id));
+    plink.setAttribute('data-nav', '');
+    line.appendChild(plink);
+    var kb = kindBadge(project.kind);
+    if (kb) line.appendChild(kb);
+    var src = str(project.sourceStatus);
+    if (src && src !== 'ok') line.appendChild(mk('span', 'chip warn', '数据源 ' + src));
+    line.appendChild(sep());
+    line.appendChild(span('meta-item', '项目最后活动 '));
+    line.appendChild(agoEl(str(project.lastActivityAt) || str(run.updatedAt), null));
+    head.appendChild(line);
+
+    head.appendChild(mk('h1', 'run-title', str(run.title) || '未命名运行'));
+    if (str(run.goal)) head.appendChild(mk('p', 'run-goal', str(run.goal)));
+
+    var meta = mk('div', 'meta-row');
+    meta.appendChild(statusPill(RUN_STATUS, run.status));
+    var rc = revChip(run.revision);
+    if (rc) meta.appendChild(rc);
+    var started = parseTime(run.startedAt);
+    if (started != null) meta.appendChild(span('meta-item', '开始于 ' + fmtDateTime(started)));
+    var live = mk('span', 'live');
+    live.appendChild(mk('span', 'dot'));
+    live.appendChild(span('live-label', '最后更新 '));
+    live.appendChild(snapshotAgeEl());
+    live.title = '页面收到快照距今的时间';
+    meta.appendChild(live);
+    var gen = generatedAtText();
+    if (gen) meta.appendChild(span('meta-item', '生成于 ' + gen));
+    var prog = progressOf(run);
+    if (prog.inProgress) meta.appendChild(statChip('进行中 ' + prog.inProgress, 'stat-info'));
+    if (prog.failed) meta.appendChild(statChip('失败 ' + prog.failed, 'stat-err'));
+    head.appendChild(meta);
+
+    head.appendChild(progressBar(prog, true));
+    return head;
+  }
+
+  function agentLanesCard(run) {
+    var card = mk('section', 'card');
+    var agents = arr(run.agents);
+    card.appendChild(cardHead('Agent 泳道', agents.length ? agents.length + ' 个 Agent' : ''));
+    if (!agents.length) {
+      card.appendChild(emptyBox('暂无 Agent 数据'));
+      return card;
+    }
+    var byId = stepIndex(run);
+    var wrap = mk('div', 'lanes');
+    var head = mk('div', 'lane lane-head');
+    var labels = ['Agent', '角色', '状态', '当前步骤', '已用时', '最后心跳', '提示'];
+    for (var i = 0; i < labels.length; i++) head.appendChild(span('', labels[i]));
+    wrap.appendChild(head);
+    for (var j = 0; j < agents.length; j++) {
+      if (isObj(agents[j])) wrap.appendChild(laneRow(agents[j], byId));
+    }
+    card.appendChild(wrap);
+    return card;
+  }
+  function stallOf(agent) {
+    if (!isObj(agent)) return null;
+    if (agent.stalled === true) return ['err', '疑似卡住'];
+    var status = str(agent.status);
+    var age = baseAge(agent);
+    if (age == null) return null;
+    if (status !== 'working' && status !== 'blocked') return null;
+    if (age >= 300) return ['err', '心跳超时'];
+    if (age >= 120) return ['warn', '心跳延迟'];
+    if (status === 'blocked') return ['warn', '阻塞中'];
+    return null;
+  }
+  function laneRow(agent, stepsById) {
+    var row = mk('div', 'lane');
+    var stalled = stallOf(agent);
+    if (stalled && stalled[0] === 'err') row.classList.add('is-stalled');
+
+    var nameCell = mk('div', 'lane-name');
+    var dot = mk('span', 'dot');
+    dot.style.background = safeColor(agent.color, '#8b98ab');
+    nameCell.appendChild(dot);
+    nameCell.appendChild(span('nm', str(agent.name) || str(agent.id) || 'agent'));
+    var kb = agentKindBadge(agent.kind);
+    if (kb) nameCell.appendChild(kb);
+    row.appendChild(nameCell);
+
+    row.appendChild(span('lane-role', str(agent.role) || '—'));
+    row.appendChild(statusPill(AGENT_STATUS, agent.status));
+
+    var stepCell = mk('div', 'lane-step');
+    var stepId = str(agent.currentStep);
+    var title = '';
+    if (stepId && stepsById.has(stepId)) title = str(stepsById.get(stepId).title);
+    var line = mk('div', 'lane-step-line');
+    if (stepId) line.appendChild(mk('span', 'chip ev-step', stepId));
+    line.appendChild(span('lane-step-title', title || (stepId ? '' : '—')));
+    stepCell.appendChild(line);
+    var currentText = str(agent.currentText);
+    if (currentText) {
+      var ct = span('lane-text', currentText);
+      ct.title = currentText;
+      stepCell.appendChild(ct);
+    }
+    row.appendChild(stepCell);
+
+    var elapsed = mk('span', 'lane-time');
+    var started = parseTime(agent.startedAt);
+    var status = str(agent.status);
+    if (started != null && (status === 'working' || status === 'blocked')) {
+      ticker(elapsed, function (now) { return fmtDur(Math.max(0, now - started)); });
+    } else {
+      elapsed.textContent = '—';
+    }
+    row.appendChild(elapsed);
+
+    var seen = mk('span', 'lane-time');
+    var baseSeen = baseAge(agent);
+    if (baseSeen == null) {
+      seen.textContent = '—';
+    } else {
+      ticker(seen, function (now) { return relAge(baseSeen + (now - state.receivedAt) / 1000); });
+    }
+    row.appendChild(seen);
+
+    var warn = mk('span', 'lane-warn');
+    if (stalled) {
+      warn.classList.add('warn-' + stalled[0]);
+      warn.textContent = stalled[1];
+    } else {
+      warn.classList.add('dim');
+      warn.textContent = '—';
+    }
+    row.appendChild(warn);
+    return row;
+  }
+
+  function stepsCard(run) {
+    var card = mk('section', 'card');
+    var steps = arr(run.steps);
+    card.appendChild(cardHead('步骤', steps.length ? steps.length + ' 个步骤' : ''));
+    if (!steps.length) {
+      card.appendChild(emptyBox('暂无步骤数据'));
+      return card;
+    }
+    var wrap = mk('div', 'steps-wrap');
+    var table = mk('table', 'steps');
+    var thead = mk('thead');
+    var htr = mk('tr');
+    var cols = ['状态', 'ID', '步骤', '负责人', '耗时', '依赖阻塞', '证据'];
+    for (var i = 0; i < cols.length; i++) {
+      var th = mk('th');
+      th.scope = 'col';
+      th.textContent = cols[i];
+      htr.appendChild(th);
+    }
+    thead.appendChild(htr);
+    table.appendChild(thead);
+
+    var groups = groupSteps(run);
+    var byId = stepIndex(run);
+    var agents = agentIndex(run);
+    for (var g = 0; g < groups.length; g++) {
+      var tbody = mk('tbody');
+      if (groups[g].phase) tbody.appendChild(phaseRow(groups[g].phase, groups[g].steps));
+      for (var s = 0; s < groups[g].steps.length; s++) {
+        tbody.appendChild(stepRow(groups[g].steps[s], byId, agents));
+      }
+      table.appendChild(tbody);
+    }
+    wrap.appendChild(table);
+    card.appendChild(wrap);
+    return card;
+  }
+
+  function eventsCard(run) {
+    var card = mk('section', 'card');
+    var evs = arr(run.events).slice(0, 40);
+    card.appendChild(cardHead('事件流', evs.length ? '最近 ' + evs.length + ' 条' : ''));
+    if (!evs.length) {
+      card.appendChild(emptyBox('暂无事件'));
+      return card;
+    }
+    var agents = agentIndex(run);
+    var box = mk('div', 'ev-list');
+    for (var i = 0; i < evs.length; i++) box.appendChild(eventRow(evs[i], agents));
+    card.appendChild(box);
+    return card;
+  }
+  function eventRow(ev, agents) {
+    var type = str(ev.type) || 'event';
+    var meta = statusMeta(EVENT_TYPE, type);
+    var row = mk('div', 'ev-row evt-' + meta[1]);
+
+    var ts = parseTime(ev.ts);
+    row.appendChild(span('ev-time', ts != null ? fmtClock(ts) : '—'));
+
+    var agentId = str(ev.agent);
+    var agent = agents ? agents.get(agentId) : null;
+    var agEl = mk('span', 'ev-agent');
+    var dot = mk('span', 'dot');
+    dot.style.background = safeColor(agent && agent.color, '#8b98ab');
+    agEl.appendChild(dot);
+    var agentLabel = agent ? (str(agent.name) || agentId) : (agentId || '—');
+    agEl.appendChild(span('ev-agent-name', agentLabel));
+    agEl.title = agentLabel;
+    row.appendChild(agEl);
+
+    var badge = span('ev-badge', meta[0]);
+    badge.title = '事件类型：' + type;
+    row.appendChild(badge);
+
+    var stepId = str(ev.stepId);
+    row.appendChild(stepId ? mk('span', 'chip ev-step', stepId) : span('ev-step dim', '—'));
+
+    var note = str(ev.note) || str(ev.current);
+    var noteEl = span('ev-note', note || '—');
+    if (note) noteEl.title = note;
+    row.appendChild(noteEl);
+    return row;
+  }
+
+  function changesCard(run) {
+    var card = mk('section', 'card');
+    var chs = arr(run.changes);
+    var revision = num(run.revision);
+    card.appendChild(cardHead('计划变更', revision != null ? '当前 v' + Math.round(revision) : ''));
+    if (!chs.length) {
+      card.appendChild(emptyBox('暂无计划变更'));
+      return card;
+    }
+    var box = mk('div', 'chg-list');
+    for (var i = 0; i < chs.length; i++) box.appendChild(changeRow(chs[i]));
+    card.appendChild(box);
+    return card;
+  }
+  function changeRow(ch) {
+    var row = mk('div', 'chg-row');
+    var top = mk('div', 'chg-top');
+    var rev = num(ch.rev);
+    top.appendChild(mk('span', 'chip rev', 'v' + (rev != null ? Math.round(rev) : '?')));
+    var at = parseTime(ch.at);
+    top.appendChild(span('chg-time', at != null ? fmtDateTime(at) : '—'));
+    if (str(ch.by)) top.appendChild(span('chg-by', 'by ' + str(ch.by)));
+    row.appendChild(top);
+    if (str(ch.reason)) row.appendChild(mk('div', 'chg-reason', str(ch.reason)));
+    var deltas = mk('div', 'chg-deltas');
+    var added = list(ch.added), removed = list(ch.removed), changed = list(ch.changed);
+    var i;
+    for (i = 0; i < added.length; i++) deltas.appendChild(deltaChip('added', str(added[i])));
+    for (i = 0; i < removed.length; i++) deltas.appendChild(deltaChip('removed', str(removed[i])));
+    for (i = 0; i < changed.length; i++) deltas.appendChild(deltaChip('changed', str(changed[i])));
+    if (deltas.children.length) row.appendChild(deltas);
+    return row;
+  }
+
+  /* ============================================================
+   * routing + render
+   * ============================================================ */
+  function parseRoute() {
+    var path = '/';
+    try { path = location.pathname || '/'; } catch (e) { path = '/'; }
+    var parts = [];
+    var raw = path.split('/');
+    for (var i = 0; i < raw.length; i++) {
+      if (!raw[i]) continue;
+      try { parts.push(decodeURIComponent(raw[i])); } catch (e2) { parts.push(raw[i]); }
+    }
+    if (!parts.length) return { name: 'overview' };
+    if (parts[0] === 'p' && parts.length === 2) return { name: 'detail', projectId: parts[1], runId: null };
+    if (parts[0] === 'r' && parts.length === 3) return { name: 'detail', projectId: parts[1], runId: parts[2] };
+    return { name: 'unknown', path: path };
+  }
+  function routeKey(route) {
+    if (route.name === 'detail') return 'detail|' + str(route.projectId) + '|' + str(route.runId);
+    return route.name;
+  }
+  function scrollYOf() {
+    try { return window.scrollY || window.pageYOffset || 0; } catch (e) { return 0; }
+  }
+  function updateTitle(route) {
+    var title = 'live-progress · 任务进度看板';
+    try {
+      if (route.name === 'overview') {
+        title = '总览 · live-progress';
+      } else if (route.name === 'detail') {
+        var p = findProject(route.projectId);
+        var r = p ? (route.runId ? findRun(p, route.runId) : latestRun(p)) : null;
+        if (r) title = (str(r.title) || '运行详情') + ' · live-progress';
+        else if (p) title = (str(p.name) || '项目') + ' · live-progress';
+        else title = '未找到 · live-progress';
+      } else {
+        title = '页面不存在 · live-progress';
+      }
+    } catch (e) { /* ignore */ }
+    try { document.title = title; } catch (e2) { /* ignore */ }
+  }
+  function render() {
+    var route = parseRoute();
+    var key = routeKey(route);
+    var same = state.routeKey === key;
+    var scrollY = same ? scrollYOf() : 0;
+    state.route = route;
+    state.routeKey = key;
+    tickers = [];
+    connEls = [];
+    notifyBtns = [];
+
+    var frag = document.createDocumentFragment();
+    frag.appendChild(topbar());
+    var view;
+    if (!state.snapshot) {
+      view = state.conn === 'offline' ? offlineView() : loadingView();
+    } else if (route.name === 'overview') {
+      view = overviewView();
+    } else if (route.name === 'detail') {
+      view = detailView(route);
+    } else {
+      view = unknownView(route.path);
+    }
+    frag.appendChild(view);
+
+    var app = document.getElementById('app');
+    if (app) {
+      clearNode(app);
+      app.appendChild(frag);
+    }
+    updateConnUI();
+    syncNotifyButtons();
+    updateTitle(route);
+    if (same && scrollY > 0) {
+      try { window.scrollTo(0, scrollY); } catch (e) { /* ignore */ }
+    } else {
+      try { window.scrollTo(0, 0); } catch (e2) { /* ignore */ }
+    }
+    runTicks();
+  }
+  function safeRender() {
+    try { render(); } catch (e) {
+      try {
+        if (typeof console !== 'undefined' && console.error) console.error('live-progress render failed', e);
+      } catch (e2) { /* ignore */ }
+    }
+  }
+  function navigate(path) {
+    if (typeof path !== 'string') return;
+    if (path.charAt(0) !== '/' || path.charAt(1) === '/') return;
+    var current = '';
+    try { current = location.pathname + location.search; } catch (e) { current = ''; }
+    if (current === path) { safeRender(); return; }
+    try { history.pushState({}, '', path); } catch (e2) { try { location.hash = '#' + path; } catch (e3) { /* ignore */ } }
+    safeRender();
+  }
+  function navigateSafe(url) {
+    if (typeof url !== 'string') return;
+    if (url.charAt(0) !== '/' || url.charAt(1) === '/') return;
+    navigate(url);
+  }
+  function onDocClick(ev) {
+    if (!ev || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    var t = ev.target;
+    var anchor = (t && typeof t.closest === 'function') ? t.closest('a[data-nav]') : null;
+    if (!anchor) return;
+    var href = anchor.getAttribute('href');
+    if (!href || href.charAt(0) !== '/') return;
+    ev.preventDefault();
+    navigate(href);
+  }
+  function onPopState() { safeRender(); }
+
+  /* ============================================================
+   * live updates: SSE + polling fallback + presence
+   * ============================================================ */
+  function setConn(mode) {
+    var next = CONN_META[mode] ? mode : 'offline';
+    if (state.conn === next) return;
+    state.conn = next;
+    updateConnUI();
+    if (!state.snapshot) safeRender();
+  }
+  function updateConnUI() {
+    var meta = CONN_META[state.conn] || CONN_META.offline;
+    for (var i = 0; i < connEls.length; i++) {
+      var item = connEls[i];
+      if (!item || !item.el || !item.el.isConnected) continue;
+      item.el.className = 'conn ' + meta[1];
+      item.el.title = meta[2] || '';
+      if (item.label) item.label.textContent = meta[0];
+    }
+  }
+  function parseJSONData(raw) {
+    if (raw == null) return null;
+    if (typeof raw !== 'string') return raw;
+    var s = raw.trim();
+    if (!s) return null;
+    try {
+      var v = JSON.parse(s);
+      if (typeof v === 'string') {
+        try { v = JSON.parse(v); } catch (e) { return v; }
+      }
+      return v;
+    } catch (e2) { return null; }
+  }
+  function applySnapshot(snap) {
+    if (!isObj(snap) || !Array.isArray(snap.projects)) return false;
+    state.snapshot = snap;
+    state.receivedAt = Date.now();
+    safeRender();
+    return true;
+  }
+  function fetchState() {
+    return fetch('/api/state', { cache: 'no-store', headers: { Accept: 'application/json' } })
+      .then(function (res) {
+        if (!res || !res.ok) throw new Error('HTTP ' + (res ? res.status : '?'));
+        return res.json();
+      })
+      .then(function (data) {
+        if (!applySnapshot(data)) throw new Error('invalid snapshot');
+        return true;
+      });
+  }
+  function pollOnce() {
+    if (state.polling) return;
+    state.polling = true;
+    fetchState().then(function () {
+      state.pollFails = 0;
+      if (state.conn !== 'live') setConn('polling');
+    }).catch(function () {
+      state.pollFails = (state.pollFails || 0) + 1;
+      if (state.pollFails >= 2) setConn('offline');
+    }).then(function () {
+      state.polling = false;
+    });
+  }
+  function startPolling() {
+    if (state.pollTimer) return;
+    state.pollTimer = setInterval(pollOnce, 3000);
+    pollOnce();
+  }
+  function stopPolling() {
+    if (state.pollTimer) {
+      clearInterval(state.pollTimer);
+      state.pollTimer = null;
+    }
+  }
+  function closeSSE() {
+    var es = state.es;
+    state.es = null;
+    state.esOpen = false;
+    if (es) {
+      try { es.close(); } catch (e) { /* ignore */ }
+    }
+  }
+  function scheduleReconnect() {
+    if (state.reconnectTimer) return;
+    var attempt = state.reconnectAttempt;
+    state.reconnectAttempt = attempt + 1;
+    var base = Math.min(30000, 1000 * Math.pow(1.8, attempt));
+    var delay = Math.round(base + Math.random() * 400);
+    state.reconnectTimer = setTimeout(function () {
+      state.reconnectTimer = null;
+      connectSSE();
+    }, delay);
+  }
+  function onSSEStateData(raw) {
+    var data = parseJSONData(raw);
+    if (!data) return;
+    var snap = data;
+    if (isObj(data.snapshot)) snap = data.snapshot;
+    else if (isObj(data.data)) snap = data.data;
+    if (applySnapshot(snap)) setConn('live');
+  }
+  function onSSENotificationData(raw) {
+    var data = parseJSONData(raw);
+    if (data) handleNotification(data);
+  }
+  function connectSSE() {
+    if (state.es) return;
+    if (typeof EventSource === 'undefined') {
+      startPolling();
+      setConn('polling');
+      return;
+    }
+    var es;
+    try { es = new EventSource('/api/stream'); } catch (e) {
+      startPolling();
+      setConn('polling');
+      scheduleReconnect();
+      return;
+    }
+    state.es = es;
+    state.esOpen = false;
+    es.addEventListener('open', function () {
+      if (state.es !== es) return;
+      state.esOpen = true;
+      state.reconnectAttempt = 0;
+      if (state.reconnectTimer) {
+        clearTimeout(state.reconnectTimer);
+        state.reconnectTimer = null;
+      }
+      stopPolling();
+      setConn('live');
+    });
+    es.addEventListener('state', function (ev) {
+      if (state.es !== es) return;
+      onSSEStateData(ev && ev.data);
+    });
+    es.addEventListener('notification', function (ev) {
+      if (state.es !== es) return;
+      onSSENotificationData(ev && ev.data);
+    });
+    es.onmessage = function (ev) {
+      if (state.es !== es) return;
+      var data = parseJSONData(ev && ev.data);
+      if (!data || !isObj(data)) return;
+      var type = str(data.event) || str(data.type);
+      if (type === 'notification') {
+        handleNotification(isObj(data.data) ? data.data : data);
+        return;
+      }
+      if (type === 'state') {
+        var snap = isObj(data.snapshot) ? data.snapshot : (isObj(data.data) ? data.data : data);
+        if (applySnapshot(snap)) setConn('live');
+        return;
+      }
+      if (Array.isArray(data.projects)) {
+        if (applySnapshot(data)) setConn('live');
+        return;
+      }
+      if (data.title || data.kind) handleNotification(data);
+    };
+    es.onerror = function () {
+      if (state.es !== es) return;
+      closeSSE();
+      startPolling();
+      if (!state.snapshot) setConn('offline');
+      else setConn('polling');
+      scheduleReconnect();
+    };
+  }
+  function sendPresence() {
+    try {
+      var req = fetch('/api/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: state.clientId }),
+        keepalive: true
+      });
+      if (req && typeof req.catch === 'function') req.catch(function () { /* offline is fine */ });
+    } catch (e) { /* ignore */ }
+  }
+
+  /* ============================================================
+   * notifications
+   * ============================================================ */
+  function notifCtor() {
+    try {
+      if (typeof Notification !== 'undefined' && Notification) return Notification;
+    } catch (e) { /* ignore */ }
+    try {
+      if (typeof window !== 'undefined' && window && window.Notification) return window.Notification;
+    } catch (e2) { /* ignore */ }
+    return null;
+  }
+  function notifPermission() {
+    var N = notifCtor();
+    if (!N) return 'unsupported';
+    var p = '';
+    try { p = String(N.permission || ''); } catch (e) { p = ''; }
+    if (p === 'granted' || p === 'denied') return p;
+    return 'default';
+  }
+  function notifyButton() {
+    var btn = mk('button', 'btn btn-notify');
+    btn.type = 'button';
+    btn.addEventListener('click', function () {
+      requestNotify().catch(function () { toast('开启通知失败', 'err'); });
+    });
+    notifyBtns.push(btn);
+    return btn;
+  }
+  function syncNotifyButtons() {
+    var perm = notifPermission();
+    for (var i = 0; i < notifyBtns.length; i++) {
+      var b = notifyBtns[i];
+      if (!b || !b.isConnected) continue;
+      b.classList.remove('is-on', 'is-off');
+      if (perm === 'granted') {
+        b.textContent = '通知已开启';
+        b.disabled = true;
+        b.classList.add('is-on');
+        b.title = '桌面通知已开启';
+      } else if (perm === 'denied') {
+        b.textContent = '通知被禁用';
+        b.disabled = true;
+        b.classList.add('is-off');
+        b.title = '已在浏览器中拒绝通知权限';
+      } else if (perm === 'unsupported') {
+        b.textContent = '通知不可用';
+        b.disabled = true;
+        b.classList.add('is-off');
+        b.title = '当前浏览器不支持桌面通知';
+      } else {
+        b.textContent = '开启通知';
+        b.disabled = false;
+        b.title = '点击开启桌面通知（需要浏览器授权）';
+      }
+    }
+  }
+  function requestNotify() {
+    var N = notifCtor();
+    if (!N) {
+      toast('当前浏览器不支持桌面通知', 'warn');
+      return Promise.resolve();
+    }
+    var perm = notifPermission();
+    if (perm === 'granted') { toast('通知已开启'); return Promise.resolve(); }
+    if (perm === 'denied') {
+      toast('通知权限已被拒绝，请在浏览器站点设置中手动开启', 'warn');
+      return Promise.resolve();
+    }
+    var request;
+    try { request = N.requestPermission(); } catch (e) {
+      toast('开启通知失败', 'err');
+      return Promise.resolve();
+    }
+    if (!request || typeof request.then !== 'function') {
+      syncNotifyButtons();
+      return Promise.resolve();
+    }
+    return request.then(function (result) {
+      syncNotifyButtons();
+      if (result === 'granted') toast('通知已开启');
+      else if (result === 'denied') toast('通知权限被拒绝', 'warn');
+      else toast('未授予通知权限', 'warn');
+    }).catch(function () {
+      toast('开启通知失败', 'err');
+    });
+  }
+  function handleNotification(data) {
+    if (!isObj(data)) return;
+    var id = str(data.id);
+    var title = str(data.title) || '进度通知';
+    var body = str(data.body);
+    var level = str(data.level);
+    var kindCls = level === 'error' ? 'err' : (level === 'warn' ? 'warn' : '');
+    if (id) {
+      if (state.notifIds.has(id)) return;
+      state.notifIds.add(id);
+      if (state.notifIds.size > 500) {
+        var first = state.notifIds.values().next();
+        if (!first.done) state.notifIds.delete(first.value);
+      }
+    }
+    var perm = notifPermission();
+    if (perm === 'granted') {
+      var N = notifCtor();
+      try {
+        var opts = { body: body };
+        if (id) opts.tag = id;
+        var n = new N(title, opts);
+        n.onclick = function () {
+          try { window.focus(); } catch (e) { /* ignore */ }
+          navigateSafe(str(data.url));
+          try { n.close(); } catch (e2) { /* ignore */ }
+        };
+        return;
+      } catch (e3) { /* fall through to in-page toast */ }
+    }
+    toast(body ? title + ' · ' + body : title, kindCls);
+  }
+
+  /* ---------- toasts ---------- */
+  function toast(message, kind) {
+    var box = document.getElementById('toasts');
+    if (!box) return;
+    var el = mk('div', 'toast' + (kind ? ' toast-' + kind : ''));
+    el.setAttribute('role', 'status');
+    var msg = mk('span', 'toast-msg');
+    msg.textContent = message == null ? '' : String(message);
+    el.appendChild(msg);
+    var close = mk('button', 'toast-x');
+    close.type = 'button';
+    close.setAttribute('aria-label', '关闭');
+    close.textContent = '×';
+    el.appendChild(close);
+    box.appendChild(el);
+    var removed = false;
+    function remove() {
+      if (removed) return;
+      removed = true;
+      el.classList.remove('show');
+      setTimeout(function () {
+        try { if (el.parentNode) el.parentNode.removeChild(el); } catch (e) { /* ignore */ }
+      }, 220);
+    }
+    close.addEventListener('click', remove);
+    try { requestAnimationFrame(function () { el.classList.add('show'); }); } catch (e) { el.classList.add('show'); }
+    setTimeout(remove, 6000);
+  }
+
+  /* ============================================================
+   * boot
+   * ============================================================ */
+  function boot() {
+    try {
+      document.addEventListener('click', onDocClick);
+      window.addEventListener('popstate', onPopState);
+    } catch (e) { /* ignore */ }
+    setInterval(runTicks, 1000);
+    setInterval(sendPresence, 10000);
+    sendPresence();
+    safeRender();
+    fetchState().catch(function () {
+      if (!state.snapshot) {
+        setConn('offline');
+        safeRender();
+      }
+    });
+    connectSSE();
+  }
+
+  if (typeof window !== 'undefined' && window.__LP_TEST__) {
+    window.__lp = {
+      applySnapshot: applySnapshot,
+      render: render,
+      parseRoute: parseRoute,
+      runTicks: runTicks,
+      handleNotification: handleNotification,
+      fmtDur: fmtDur,
+      relAge: relAge
+    };
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
+  }
+})();
+</script>
+</body>
+</html>
