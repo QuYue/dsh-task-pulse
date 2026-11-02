@@ -208,6 +208,13 @@
   .pc-run { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .pc-run-title { flex: 1 1 auto; min-width: 0; font-size: 13px; color: #cfd9e6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pc-nodata { font-size: 12px; color: var(--dim); }
+  .local-projects-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; }
+  .local-projects-label { color: #7e8da3; font-size: 11px; margin-right: 2px; }
+  .local-project-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid var(--border-soft); border-radius: 999px; color: #b8c4d4; text-decoration: none; font-size: 11.5px; background: rgba(255,255,255,.025); }
+  .local-project-chip:hover { border-color: #3c5574; color: #e1ebf7; }
+  .local-project-chip.active { border-color: var(--blue); color: #dceaff; background: rgba(94,160,255,.10); }
+  .local-project-current { font-size: 9.5px; color: var(--green); }
+  .local-project-count { font-size: 9.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
   .pc-locals { display: flex; flex-wrap: wrap; gap: 4px; margin: 7px 0 2px; align-items: center; }
   .pc-locals-label { color: #7e8da3; font-size: 10.5px; margin-right: 2px; }
   .pc-agents { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: rgba(255, 255, 255, .022); border: 1px solid var(--border-soft); border-radius: 8px; }
@@ -1320,7 +1327,11 @@
     if (!project) {
       return stateView('找不到项目', '项目「' + str(route.projectId) + '」不存在，或已被从注册表中移除。');
     }
+    var selectedLocal = str(route.localProjectId);
     var rows = runRowsForProject(project);
+    if (selectedLocal) {
+      rows = rows.filter(function (row) { return str(row.run.localProjectId) === selectedLocal; });
+    }
     var running = 0;
     for (var i = 0; i < rows.length; i++) {
       if (str(rows[i].run.status) === 'running') running++;
@@ -1357,6 +1368,26 @@
     meta.appendChild(projectDel);
     hero.appendChild(meta);
     page.appendChild(hero);
+
+    var locals = arr(project.localProjects);
+    if (locals.length) {
+      var bar = mk('section', 'card local-projects-bar');
+      bar.appendChild(span('local-projects-label', '项目'));
+      var allLink = mk('a', 'local-project-chip' + (selectedLocal ? '' : ' active'), '全部任务');
+      allLink.href = '/p/' + encodeURIComponent(str(project.id));
+      allLink.setAttribute('data-nav', '');
+      bar.appendChild(allLink);
+      for (var lp = 0; lp < locals.length; lp++) {
+        var item = locals[lp];
+        var link = mk('a', 'local-project-chip' + (selectedLocal === str(item.id) ? ' active' : ''), str(item.name));
+        link.href = '/p/' + encodeURIComponent(str(project.id)) + '?project=' + encodeURIComponent(str(item.id));
+        link.setAttribute('data-nav', '');
+        if (item.current) link.appendChild(span('local-project-current', '当前'));
+        if (item.tasks) link.appendChild(span('local-project-count', str(item.tasks)));
+        bar.appendChild(link);
+      }
+      page.appendChild(bar);
+    }
 
     var card = mk('section', 'card task-list');
     var head = mk('div', 'task-list-head');
@@ -1944,7 +1975,12 @@
    * ============================================================ */
   function parseRoute() {
     var path = '/';
-    try { path = location.pathname || '/'; } catch (e) { path = '/'; }
+    var query = {};
+    try {
+      path = location.pathname || '/';
+      var params = new URLSearchParams(location.search || '');
+      params.forEach(function (value, key) { query[key] = value; });
+    } catch (e) { /* ignore */ }
     var parts = [];
     var raw = path.split('/');
     for (var i = 0; i < raw.length; i++) {
@@ -1952,13 +1988,13 @@
       try { parts.push(decodeURIComponent(raw[i])); } catch (e2) { parts.push(raw[i]); }
     }
     if (!parts.length) return { name: 'overview' };
-    if (parts[0] === 'p' && parts.length === 2) return { name: 'project', projectId: parts[1] };
+    if (parts[0] === 'p' && parts.length === 2) return { name: 'project', projectId: parts[1], localProjectId: str(query.project) };
     if (parts[0] === 'r' && parts.length === 3) return { name: 'detail', projectId: parts[1], runId: parts[2] };
     return { name: 'unknown', path: path };
   }
   function routeKey(route) {
     if (route.name === 'detail') return 'detail|' + str(route.projectId) + '|' + str(route.runId);
-    if (route.name === 'project') return 'project|' + str(route.projectId);
+    if (route.name === 'project') return 'project|' + str(route.projectId) + '|' + str(route.localProjectId);
     return route.name;
   }
   function scrollYOf() {

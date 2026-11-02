@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.2.2 — 2026-11-03
+
+- session 任务列表页新增「项目」筛选栏：`全部任务` + 每个逻辑项目；
+- 空项目也有入口（显示任务数 0），支持 `/p/<session>?project=<localProjectId>`；
+- 项目切换/重命名后 hub 状态会刷新。
+
 ## v3.2.1 — 2026-11-03
 
 - 修复 `/tp` Host 使用可变 cwd 的默认 hub home，导致 8770 重启后 registry 为空；
