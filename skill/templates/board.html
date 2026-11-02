@@ -533,18 +533,18 @@
 
   /* ---------- status dictionaries ---------- */
   var RUN_STATUS = {
-    running: ['运行中', 'info'],
-    in_progress: ['进行中', 'info'],
-    working: ['运行中', 'info'],
-    completed: ['已完成', 'ok'],
-    done: ['已完成', 'ok'],
+    running: ['进行', 'info'],
+    in_progress: ['进行', 'info'],
+    working: ['进行', 'info'],
+    completed: ['完成', 'ok'],
+    done: ['完成', 'ok'],
     failed: ['失败', 'err'],
     error: ['失败', 'err'],
-    timeout: ['超时', 'err'],
-    blocked: ['阻塞', 'warn'],
-    stalled: ['停滞', 'warn'],
-    pending: ['待开始', 'idle'],
-    queued: ['排队中', 'idle'],
+    timeout: ['失败', 'err'],
+    blocked: ['等待', 'warn'],
+    stalled: ['等待', 'warn'],
+    pending: ['等待', 'idle'],
+    queued: ['等待', 'idle'],
     cancelled: ['已取消', 'idle'],
     canceled: ['已取消', 'idle']
   };
@@ -556,13 +556,13 @@
     failed: ['失败', 'err']
   };
   var STEP_STATUS = {
-    pending: ['待开始', 'idle'],
-    in_progress: ['进行中', 'info'],
-    blocked: ['阻塞', 'warn'],
+    pending: ['等待', 'idle'],
+    in_progress: ['进行', 'info'],
+    blocked: ['等待', 'warn'],
     done: ['完成', 'ok'],
     failed: ['失败', 'err'],
-    skipped: ['已跳过', 'dim'],
-    superseded: ['已取代', 'dim']
+    skipped: ['跳过', 'dim'],
+    superseded: ['已取消', 'dim']
   };
   var EVENT_TYPE = {
     init: ['初始化', 'info'],
@@ -615,10 +615,10 @@
     notifIds: new Set(),
     progressPos: (function () {
       try {
-        var saved = localStorage.getItem('lp.progressPos');
+        var saved = localStorage.getItem('lp.progressPos2');
         if (saved === 'left' || saved === 'right' || saved === 'above' || saved === 'below') return saved;
       } catch (e) { /* ignore */ }
-      return 'right';
+      return 'below';
     })()
   };
   var PROGRESS_POS = { right: '右侧', left: '左侧', above: '上方', below: '下方' };
@@ -626,7 +626,7 @@
   function cycleProgressPos() {
     var index = PROGRESS_POS_ORDER.indexOf(state.progressPos);
     state.progressPos = PROGRESS_POS_ORDER[(index + 1) % PROGRESS_POS_ORDER.length];
-    try { localStorage.setItem('lp.progressPos', state.progressPos); } catch (e) { /* ignore */ }
+    try { localStorage.setItem('lp.progressPos2', state.progressPos); } catch (e) { /* ignore */ }
     safeRender();
   }
   var tickers = [];
