@@ -49,6 +49,17 @@ window.__ModuleLoader__.load({
 .dsh-lp-count { color: var(--dsw-alias-label-tertiary, #8b98ab); font-variant-numeric: tabular-nums; }
 .dsh-lp-step-progress { display: flex; align-items: center; gap: 4px; flex: none; }
 .dsh-lp-line2 .dsh-lp-bar { width: 56px; }
+.dsh-lp-line2 .dsh-lp-bar-fill { background: #3ddc97; }
+.dsh-lp-table-wrap { width: 100%; }
+.dsh-lp-table-wrap.dsh-lp-scroll {
+  max-height: 300px; overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: rgba(127,127,127,.45) transparent;
+}
+.dsh-lp-table-wrap.dsh-lp-scroll::-webkit-scrollbar { width: 6px; }
+.dsh-lp-table-wrap.dsh-lp-scroll::-webkit-scrollbar-thumb {
+  background: rgba(127,127,127,.45); border-radius: 999px;
+}
+.dsh-lp-table-wrap.dsh-lp-scroll::-webkit-scrollbar-track { background: transparent; }
 .dsh-lp-chevron { flex: none; color: var(--dsw-alias-label-tertiary, #8b98ab); font-size: 11px; }
 .dsh-lp-body {
   border-top: 1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.08));
@@ -158,7 +169,10 @@ window.__ModuleLoader__.load({
       const toggleNote = (id) => setNotes((prev) => Object.assign({}, prev, { [id]: !prev[id] }));
 
       const currentStep = SAMPLE.steps.find((step) => step.status === "doing");
-      const barPct = Math.max(0, Math.min(100, SAMPLE.percent));
+      const doneCount = SAMPLE.steps.filter((step) => step.status === "done").length;
+      const totalCount = SAMPLE.steps.length;
+      const taskPct = totalCount ? Math.round(doneCount / totalCount * 100) : 0;
+      const barPct = Math.max(0, Math.min(100, taskPct));
       const head = h("div", { className: "dsh-lp-head", role: "button", tabIndex: 0,
         title: open ? "收起任务进度" : "展开任务进度",
         onClick: toggle,
@@ -171,8 +185,8 @@ window.__ModuleLoader__.load({
             h("span", { className: "dsh-lp-bar" },
               h("span", { className: "dsh-lp-bar-fill", style: { width: barPct + "%" } })
             ),
-            h("span", { className: "dsh-lp-summary-pct" }, SAMPLE.percent + "%"),
-            h("span", { className: "dsh-lp-count" }, "· " + SAMPLE.done + "/" + SAMPLE.total)
+            h("span", { className: "dsh-lp-summary-pct" }, taskPct + "%"),
+            h("span", { className: "dsh-lp-count" }, "· " + doneCount + "/" + totalCount)
           ),
           h("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸")
         ),
@@ -216,11 +230,13 @@ window.__ModuleLoader__.load({
 
         body = h("div", { className: "dsh-lp-body" },
           h("div", { className: "dsh-lp-meta" }, "用时 " + SAMPLE.elapsed + " · 步骤 " + SAMPLE.steps.length + " 个"),
-          h("table", { className: "dsh-lp-table" },
-            h("thead", null, h("tr", null,
-              ["状态", "步骤", "执行者", "进度", "开始/结束", "耗时"].map((label) => h("th", { key: label }, label))
-            )),
-            h("tbody", null, rows)
+          h("div", { className: "dsh-lp-table-wrap" + (SAMPLE.steps.length > 10 ? " dsh-lp-scroll" : "") },
+            h("table", { className: "dsh-lp-table" },
+              h("thead", null, h("tr", null,
+                ["状态", "步骤", "执行者", "进度", "开始/结束", "耗时"].map((label) => h("th", { key: label }, label))
+              )),
+              h("tbody", null, rows)
+            )
           ),
           h("div", { className: "dsh-lp-actions" },
             h("a", { className: "dsh-lp-link", href: "http://127.0.0.1:8770/", target: "_blank", rel: "noreferrer" }, "打开完整看板 8770"),
