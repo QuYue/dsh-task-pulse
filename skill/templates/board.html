@@ -274,26 +274,33 @@
   /* ---------- step table ---------- */
   .steps-wrap { overflow-x: auto; margin: 2px -4px 0; }
   table.steps {
-    width: 100%; min-width: 1020px; table-layout: fixed;
+    width: 100%; min-width: 920px; table-layout: fixed;
     border-collapse: separate; border-spacing: 0; font-size: 12px;
   }
-  .steps th:nth-child(3) { width: auto; }
   .steps thead th {
     text-align: left; font-size: 10.5px; letter-spacing: .4px; color: var(--dim);
-    font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap;
+    font-weight: 600; padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap;
   }
-  .steps th:nth-child(1) { width: 96px; }
-  .steps th:nth-child(2) { width: 62px; }
-  .steps th:nth-child(4) { width: 108px; }
-  .steps th:nth-child(5) { width: 112px; }
-  .steps th:nth-child(6) { width: 74px; }
-  .steps th:nth-child(7) { width: 96px; }
-  .steps th:nth-child(8) { width: 178px; }
-  .step-progress { display: flex; flex-direction: column; gap: 3px; min-width: 92px; }
-  .step-progress-meta { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .step-progress-num { color: #cfd9e6; font-weight: 600; }
-  .step-progress-track { height: 5px; border-radius: 999px; background: rgba(255, 255, 255, .07); overflow: hidden; }
+  .steps th:nth-child(1) { width: 88px; }
+  .steps th:nth-child(2) { width: auto; }
+  .steps th:nth-child(3) { width: 118px; }
+  .steps th:nth-child(4) { width: 96px; }
+  .steps th:nth-child(5) { width: 64px; }
+  .steps th:nth-child(6) { width: 88px; }
+  .steps th:nth-child(7) { width: 172px; }
+  .steps td { padding: 5px 8px; }
+  .step-id {
+    font-size: 10px; color: var(--dim); background: rgba(255, 255, 255, .04);
+    border-radius: 4px; padding: 0 4px; flex: none;
+  }
+  .step-progress { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .step-progress-track {
+    width: 58px; height: 5px; flex: 0 0 auto; border-radius: 999px;
+    background: rgba(255, 255, 255, .07); overflow: hidden;
+  }
   .step-progress-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .35s ease; }
+  .step-progress-num { font-size: 10.5px; color: #cfd9e6; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cell-ev .chip { max-width: 132px; }
   .steps td { padding: 7px 8px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
   .steps tbody:last-child tr:last-child td { border-bottom: 0; }
   .steps tr:not(.phase-row) td:first-child { border-left: 3px solid transparent; }
@@ -900,21 +907,20 @@
       return box;
     }
     pct = clamp(pct, 0, 100);
-    var meta = mk('div', 'step-progress-meta');
-    meta.appendChild(span('step-progress-num', Math.round(pct) + '%'));
-    if (str(step.progressNote)) meta.title = str(step.progressNote);
     var track = mk('div', 'step-progress-track');
     var fill = mk('div', 'step-progress-fill');
     fill.style.width = pct + '%';
     track.appendChild(fill);
-    box.appendChild(meta);
+    var label = mk('span', 'step-progress-num', Math.round(pct) + '%');
+    if (str(step.progressNote)) label.title = str(step.progressNote);
     box.appendChild(track);
+    box.appendChild(label);
     return box;
   }
   function phaseRow(phase, steps) {
     var tr = mk('tr', 'phase-row');
     var td = mk('td');
-    td.colSpan = 8;
+    td.colSpan = 7;
     var box = mk('div', 'phase-head');
     var status = str(phase && phase.status);
     box.appendChild(mk('span', 'dot ph-' + (STEP_STATUS[status] ? status : 'pending')));
@@ -939,34 +945,31 @@
     tdStatus.appendChild(statusPill(STEP_STATUS, status));
     tr.appendChild(tdStatus);
 
-    var id = str(step.id);
-    var tdId = mk('td', 'cell-id');
-    tdId.appendChild(mk('code', 'mono', id || '—'));
-    tr.appendChild(tdId);
-
     var tdTitle = mk('td', 'cell-title');
     var titleLine = mk('div', 'step-title-line');
+    var id = str(step.id);
+    if (id) titleLine.appendChild(mk('code', 'step-id', id));
     var titleEl = mk('span', 'step-title', str(step.title) || '未命名步骤');
     var acceptance = str(step.acceptance);
-    if (acceptance) {
-      titleEl.title = '验收标准：' + acceptance;
-      titleEl.classList.add('has-accept');
-    }
+    var note = str(step.note);
+    var tooltip = [];
+    if (acceptance) tooltip.push('验收：' + acceptance);
+    if (note) tooltip.push('备注：' + note);
+    if (tooltip.length) titleEl.title = tooltip.join('\n');
     titleLine.appendChild(titleEl);
     if (str(step.size)) titleLine.appendChild(mk('span', 'chip size', str(step.size)));
     tdTitle.appendChild(titleLine);
-    if (str(step.note)) tdTitle.appendChild(mk('div', 'step-note', '备注：' + str(step.note)));
     tr.appendChild(tdTitle);
+
+    var tdProgress = mk('td', 'cell-progress');
+    tdProgress.appendChild(stepProgressCell(step));
+    tr.appendChild(tdProgress);
 
     var tdOwner = mk('td', 'cell-owner');
     var executed = status !== 'pending' && status !== 'skipped' && status !== 'superseded';
     if (executed) tdOwner.appendChild(ownerCell(step.owner, agents));
     else tdOwner.appendChild(span('dim', '—'));
     tr.appendChild(tdOwner);
-
-    var tdProgress = mk('td', 'cell-progress');
-    tdProgress.appendChild(stepProgressCell(step));
-    tr.appendChild(tdProgress);
 
     var tdElapsed = mk('td', 'cell-elapsed');
     tdElapsed.appendChild(elapsedCell(step));
@@ -987,7 +990,9 @@
     var evBox = mk('div', 'ev-box');
     var evs = list(step.evidence);
     if (evs.length) {
-      for (var j = 0; j < evs.length; j++) evBox.appendChild(evidenceChip(str(evs[j])));
+      var shown = Math.min(evs.length, 2);
+      for (var j = 0; j < shown; j++) evBox.appendChild(evidenceChip(str(evs[j])));
+      if (evs.length > shown) evBox.appendChild(mk('span', 'chip', '+' + (evs.length - shown)));
     } else {
       evBox.appendChild(span('dim', '—'));
     }
@@ -997,11 +1002,6 @@
     return tr;
   }
 
-  /* ============================================================
-   * views
-   * ============================================================ */
-
-  /* ---------- top bar ---------- */
   function topbar() {
     var bar = mk('header', 'topbar');
     var brand = mk('a', 'brand');
@@ -1577,7 +1577,7 @@
     var table = mk('table', 'steps');
     var thead = mk('thead');
     var htr = mk('tr');
-    var cols = ['状态', 'ID', '步骤', '执行者', '进度', '耗时', '依赖阻塞', '证据'];
+    var cols = ['状态', '步骤', '进度', '执行者', '耗时', '依赖阻塞', '证据'];
     for (var i = 0; i < cols.length; i++) {
       var th = mk('th');
       th.scope = 'col';
