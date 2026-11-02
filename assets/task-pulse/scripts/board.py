@@ -1854,7 +1854,12 @@ def cmd_auto(args) -> int:
                 print(f"reuse task: {view['id']}")
                 print(f"board: {read_json(resolve_home(args) / 'hub.json').get('url')}r/{view['projectId']}/{view['id']}")
                 return 0
-    title = str(getattr(args, "title", None) or "当前请求").strip() or "当前请求"
+    title = str(getattr(args, "title", None) or "").strip()
+    if not title:
+        goal_text = str(getattr(args, "goal", None) or "")
+        first_line = next((line.strip() for line in goal_text.splitlines() if line.strip()), "")
+        title = (first_line[:30] + "…") if len(first_line) > 30 else first_line
+        title = title or "任务"
     step_title = str(getattr(args, "step", None) or title).strip() or title
     plan = {
         "title": title,

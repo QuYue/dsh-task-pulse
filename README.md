@@ -106,7 +106,7 @@ rm ~/.dsh/profiles/desktop/node_modules/@quyue/dsh-task-pulse
 /tp project list                 # 项目列表
 /tp task new "LOT v7 统计" 统计 2024 年各层数量  # 在 current project 新建任务并唤醒模型
 /tp task update 补充要求          # 继续当前任务，不新建
-/tp task auto "当前请求" 内容     # 有 running 当前任务则继续，否则新建
+/tp task auto 任务内容             # 有 running 当前任务则继续，否则新建；标题取内容首行
 ```
 
 ### Agent / 脚本
@@ -117,7 +117,7 @@ skill 正文末尾会注入 `BOARD` 与 `ASSETS` 的绝对路径；也可以直�
 BOARD="python3 /path/to/dsh-task-pulse/assets/task-pulse/scripts/board.py"
 
 $BOARD ensure
-$BOARD auto --title "当前请求"
+$BOARD auto --title "内容首行"
 $BOARD status
 $BOARD start s1 --agent lead
 $BOARD report s1 --percent 60 --agent lead

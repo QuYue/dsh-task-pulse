@@ -51,9 +51,9 @@ BOARD="python3 <插件注入的 BOARD 路径>"
 
 ```bash
 $BOARD ensure                       # hub 没开就后台拉起；已开则直接返回 URL
-$BOARD auto --title "当前请求"       # ensure + 新建任务 + start s1（占位）
+$BOARD auto --title "内容首行"       # ensure + 新建任务 + start s1（占位）
 # 或者复用当前 session 里最新的 running 任务：
-$BOARD auto --title "当前请求" --reuse
+$BOARD auto --title "内容首行" --reuse
 ```
 
 `auto` 先建一个只有一步的占位任务，随后用 `revise` 换成真实计划。
