@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.4.5 — 2026-11-03
+
+- 修复 v2 卡片生命周期使用了错误的“最后更新时间”：
+  - 之前用 session row.updatedAt，会被 assistant/tool 活动推进；
+  - 现在优先使用 sessionListMetadata.lastPromptAt，只跟最后一条用户消息比较；
+  - 任务创建后卡片不会再被自己的执行活动隐藏。
+
 ## v3.4.4 — 2026-11-03
 
 - 卡片选择逻辑恢复为 v2：
