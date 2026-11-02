@@ -291,6 +291,23 @@
   .steps th:nth-child(8) { width: 168px; }
   .steps td { padding: 5px 8px; }
   .cell-start, .cell-end { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .note-mark {
+    font-size: 10px; line-height: 1.6; color: var(--amber); background: rgba(255, 180, 84, .1);
+    border: 1px solid rgba(255, 180, 84, .35); border-radius: 4px; padding: 0 4px;
+    cursor: pointer; flex: none; font-family: inherit;
+  }
+  .note-mark:hover { background: rgba(255, 180, 84, .2); }
+  .step-note-line {
+    margin: 3px 0 1px; font-size: 11px; color: var(--muted); line-height: 1.5;
+    background: rgba(255, 255, 255, .03); border-left: 2px solid rgba(255, 180, 84, .5);
+    padding: 2px 7px; border-radius: 0 4px 4px 0; white-space: normal;
+  }
+  .steps tbody tr.step-row { cursor: pointer; }
+  .steps tbody tr.step-row:hover td { background: rgba(79, 140, 255, .045); }
+  .steps tbody tr.step-focus td { background: rgba(79, 140, 255, .1); }
+  .ev-step-btn { cursor: pointer; font-family: inherit; }
+  .ev-step-btn:hover { border-color: var(--accent); color: #cfe0ff; }
+  .ev-row.ev-focus { background: rgba(79, 140, 255, .1); border-color: rgba(79, 140, 255, .4); }
   .step-tag {
     font-size: 10.5px; line-height: 1.6; color: var(--muted);
     background: rgba(255, 255, 255, .05); border: 1px solid var(--border-soft);
@@ -642,6 +659,7 @@
     pollFails: 0,
     clientId: makeClientId(),
     notifIds: new Set(),
+    openNotes: new Set(),
     progressPos: (function () {
       try {
         var saved = localStorage.getItem('lp.progressPos2');
@@ -984,9 +1002,42 @@
     tr.appendChild(td);
     return tr;
   }
+  function stepDomId(stepId) {
+    return 'step-' + str(stepId).replace(/[^A-Za-z0-9_-]/g, '_');
+  }
+  function toggleStepNote(stepId) {
+    var id = str(stepId);
+    if (state.openNotes.has(id)) state.openNotes.delete(id);
+    else state.openNotes.add(id);
+    safeRender();
+  }
+  function focusStep(stepId, target) {
+    var id = str(stepId);
+    var stepRow = document.getElementById(stepDomId(id));
+    var eventRows = [];
+    var allEvents = document.querySelectorAll('.ev-row');
+    for (var i = 0; i < allEvents.length; i++) {
+      if (allEvents[i].getAttribute('data-step') === id) eventRows.push(allEvents[i]);
+    }
+    var oldSteps = document.querySelectorAll('.step-focus');
+    for (var a = 0; a < oldSteps.length; a++) oldSteps[a].classList.remove('step-focus');
+    var oldEvents = document.querySelectorAll('.ev-focus');
+    for (var b = 0; b < oldEvents.length; b++) oldEvents[b].classList.remove('ev-focus');
+    if (stepRow) stepRow.classList.add('step-focus');
+    for (var c = 0; c < eventRows.length; c++) eventRows[c].classList.add('ev-focus');
+    var scrollTarget = target === 'step'
+      ? stepRow
+      : (eventRows.length ? eventRows[0] : document.getElementById('events-card'));
+    if (scrollTarget && scrollTarget.scrollIntoView) {
+      scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
   function stepRow(step, byId, agents) {
     var status = str(step.status) || 'pending';
     var tr = mk('tr', 'row-' + status);
+    tr.id = stepDomId(step.id);
+    tr.setAttribute('data-step', str(step.id));
+    tr.classList.add('step-row');
 
     var tdStatus = mk('td', 'cell-status');
     tdStatus.appendChild(statusPill(STEP_STATUS, status));
@@ -1007,6 +1058,16 @@
     if (note) tooltip.push('备注：' + note);
     if (tooltip.length) titleEl.title = tooltip.join('\n');
     titleLine.appendChild(titleEl);
+    if (note) {
+      var mark = mk('button', 'note-mark', '注');
+      mark.type = 'button';
+      mark.title = '备注：' + note;
+      mark.addEventListener('click', function (event) {
+        event.stopPropagation();
+        toggleStepNote(step.id);
+      });
+      titleLine.appendChild(mark);
+    }
     tdTitle.appendChild(titleLine);
     var mode = state.progressPos;
     var progressEl = stepProgressElement(step, mode === 'above' || mode === 'below');
@@ -1016,6 +1077,14 @@
       else if (mode === 'above') tdTitle.insertBefore(progressEl, titleLine);
       else tdTitle.appendChild(progressEl);
     }
+    if (note && state.openNotes.has(str(step.id))) {
+      tdTitle.appendChild(mk('div', 'step-note-line', '备注：' + note));
+    }
+    tr.addEventListener('click', function (event) {
+      var target = event.target;
+      if (target && target.closest && target.closest('button, a, .note-mark, .ev-step')) return;
+      focusStep(step.id, 'events');
+    });
     tr.appendChild(tdTitle);
 
     var tdOwner = mk('td', 'cell-owner');
@@ -1673,6 +1742,7 @@
 
   function eventsCard(run) {
     var card = mk('section', 'card');
+    card.id = 'events-card';
     var evs = arr(run.events).slice(0, 40);
     card.appendChild(cardHead('事件流', evs.length ? '最近 ' + evs.length + ' 条' : ''));
     if (!evs.length) {
@@ -1689,6 +1759,8 @@
     var type = str(ev.type) || 'event';
     var meta = statusMeta(EVENT_TYPE, type);
     var row = mk('div', 'ev-row evt-' + meta[1]);
+    var evStepId = str(ev.stepId);
+    if (evStepId) row.setAttribute('data-step', evStepId);
 
     var ts = parseTime(ev.ts);
     row.appendChild(span('ev-time', ts != null ? fmtClock(ts) : '—'));
@@ -1708,8 +1780,19 @@
     badge.title = '事件类型：' + type;
     row.appendChild(badge);
 
-    var stepId = str(ev.stepId);
-    row.appendChild(stepId ? mk('span', 'chip ev-step', stepId) : span('ev-step dim', '—'));
+    var stepId = evStepId;
+    if (stepId) {
+      var stepBtn = mk('button', 'chip ev-step ev-step-btn', stepId);
+      stepBtn.type = 'button';
+      stepBtn.title = '跳转到步骤 ' + stepId;
+      stepBtn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        focusStep(stepId, 'step');
+      });
+      row.appendChild(stepBtn);
+    } else {
+      row.appendChild(span('ev-step dim', '—'));
+    }
 
     var note = str(ev.note) || str(ev.current);
     var noteEl = span('ev-note', note || '—');
