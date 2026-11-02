@@ -361,6 +361,43 @@ def list_local_projects(session_dir: Path) -> list:
     return [p for p in sorted(projects.iterdir()) if p.is_dir() and (p / "project.json").exists()]
 
 
+def rename_local_project(session_dir: Path, local_project_id: str, name: str):
+    session_dir = Path(session_dir)
+    local_project_id = slugify(local_project_id, "project")
+    name = str(name or "").strip()
+    if not name:
+        return False, "name is required"
+    target = projects_path(session_dir) / local_project_id
+    if not target.is_dir() or not (target / "project.json").exists():
+        return False, f"unknown local project: {local_project_id}"
+    meta = _project_meta(target)
+    meta["name"] = name
+    write_json(target / "project.json", meta)
+    return True, None
+
+
+def rename_task(home: Path, project_id: str, task_id: str, name: str):
+    project_id = slugify(project_id, "project")
+    task_id = slugify(task_id, "task")
+    name = str(name or "").strip()
+    if not name:
+        return False, "name is required"
+    project = load_projects(home).get("projects", {}).get(project_id)
+    if project is None:
+        return False, f"unknown project: {project_id}"
+    base = project_base(home, project)
+    run_dir = resolve_run(base, task_id)
+    if run_dir is None or not (run_dir / "plan.json").exists():
+        return False, f"unknown task: {task_id}"
+    plan = load_plan(run_dir) or {}
+    plan["name"] = name
+    plan["updatedAt"] = iso()
+    save_plan(run_dir, plan)
+    append_event(run_dir, {"agent": "web", "type": "rename", "note": f"task -> {name}"})
+    render_run(run_dir)
+    return True, None
+
+
 def delete_local_project(session_dir: Path, local_project_id: str):
     """Archive one logical project under <session>/.trash and move current pointer away."""
     session_dir = Path(session_dir)
@@ -1633,6 +1670,31 @@ class Handler(BaseHTTPRequestHandler):
                 return
             ok, error = delete_task(self.hub.home, str(payload.get("projectId") or ""),
                                     str(payload.get("taskId") or ""))
+            self._send_json(200 if ok else 400, {"ok": ok, "error": error})
+            return
+        if parsed.path == "/api/local-project/rename":
+            try:
+                payload = json.loads(self._read_body() or b"{}")
+            except Exception:
+                payload = {}
+            project_id = str(payload.get("projectId") or "")
+            local_id = str(payload.get("localProjectId") or "")
+            project = load_projects(self.hub.home).get("projects", {}).get(project_id)
+            if project is None:
+                self._send_json(400, {"ok": False, "error": "unknown project"})
+                return
+            base = project_base(self.hub.home, project)
+            ok, error = rename_local_project(base, local_id, str(payload.get("name") or ""))
+            self._send_json(200 if ok else 400, {"ok": ok, "error": error})
+            return
+        if parsed.path == "/api/task/rename":
+            try:
+                payload = json.loads(self._read_body() or b"{}")
+            except Exception:
+                payload = {}
+            ok, error = rename_task(self.hub.home, str(payload.get("projectId") or ""),
+                                    str(payload.get("taskId") or ""),
+                                    str(payload.get("name") or ""))
             self._send_json(200 if ok else 400, {"ok": ok, "error": error})
             return
         if parsed.path == "/api/local-project/delete":
@@ -2911,6 +2973,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("rename", parents=[common], help="rename the current task")
     p.add_argument("--name", required=True)
+    p.add_argument("--run")
     p.add_argument("--by")
     p.set_defaults(func=cmd_rename)
 

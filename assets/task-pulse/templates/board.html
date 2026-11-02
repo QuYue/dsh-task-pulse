@@ -246,6 +246,8 @@
   .detail-head::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: var(--accent); opacity: .9; }
   .project-line { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
   .project-name { color: var(--text); font-weight: 600; }
+  .run-title-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .run-title-line .run-title { margin: 6px 0 0; }
   .run-title { margin: 6px 0 0; font-size: 21px; line-height: 1.3; letter-spacing: .2px; overflow-wrap: anywhere; }
   .run-goal { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-width: 900px; overflow-wrap: anywhere; }
   .meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
@@ -313,6 +315,8 @@
     color: #ff9aa3; font-family: inherit;
   }
   .row-del:hover { background: rgba(255, 95, 109, .2); }
+  .card-edit { color: #8fc1ff; font-size: 12px; }
+  .card-edit:hover { background: rgba(79, 140, 255, .14); }
   .btn.danger { color: #ffb3b9; border-color: rgba(255, 95, 109, .4); background: rgba(255, 95, 109, .08); }
   .btn.danger:hover { background: rgba(255, 95, 109, .18); }
   table.tasks th:last-child { width: 64px; }
@@ -458,6 +462,12 @@
   }
   .modal-title { margin: 0 0 8px; font-size: 14px; font-weight: 650; color: var(--text); }
   .modal-body { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+  .modal-input {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 13px;
+    color: var(--text); background: rgba(255,255,255,.04);
+    border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px;
+  }
+  .modal-input:focus { outline: 1px solid var(--blue); border-color: var(--blue); }
   .modal-text { margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
   .modal-actions .btn { padding: 5px 12px; font-size: 12px; }
@@ -1461,6 +1471,15 @@
     tr.appendChild(timeCell);
 
     var actCell = mk('td', 'cell-act');
+    var renameBtn = mk('button', 'row-del card-edit', '改名');
+    renameBtn.type = 'button';
+    renameBtn.title = '重命名任务';
+    renameBtn.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      renameTask(project, run);
+    });
+    actCell.appendChild(renameBtn);
     var delBtn = mk('button', 'row-del', '删除');
     delBtn.type = 'button';
     delBtn.title = '删除任务';
@@ -1553,6 +1572,16 @@
     head.appendChild(mk('span', 'pc-dot'));
     head.appendChild(mk('span', 'pc-name', str(local.name) || lid || '未命名项目'));
     if (local.current) head.appendChild(mk('span', 'chip accent', '当前'));
+    var localRename = mk('button', 'card-del card-edit', '✎');
+    localRename.type = 'button';
+    localRename.title = '重命名项目';
+    localRename.setAttribute('aria-label', '重命名项目');
+    localRename.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      renameLocalProject(session, local);
+    });
+    head.appendChild(localRename);
     var localDel = mk('button', 'card-del', '×');
     localDel.type = 'button';
     localDel.title = '删除项目';
@@ -1755,7 +1784,17 @@
     line.appendChild(agoEl(str(project.lastActivityAt) || str(run.updatedAt), null));
     head.appendChild(line);
 
-    head.appendChild(mk('h1', 'run-title', str(run.title) || '未命名运行'));
+    var titleLine = mk('div', 'run-title-line');
+    titleLine.appendChild(mk('h1', 'run-title', str(run.title) || '未命名运行'));
+    var renameRun = mk('button', 'btn small card-edit', '重命名');
+    renameRun.type = 'button';
+    renameRun.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      renameTask(project, run);
+    });
+    titleLine.appendChild(renameRun);
+    head.appendChild(titleLine);
     if (str(run.goal)) head.appendChild(mk('p', 'run-goal', str(run.goal)));
 
     var meta = mk('div', 'meta-row');
@@ -2259,6 +2298,83 @@
       var first = actions.querySelector('button');
       if (first) { try { first.focus(); } catch (e4) { /* ignore */ } }
     });
+  }
+  function showPrompt(options) {
+    options = options || {};
+    return new Promise(function (resolve) {
+      var backdrop = mk('div', 'modal-backdrop');
+      var modal = mk('div', 'modal');
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      if (options.title) modal.appendChild(mk('h3', 'modal-title', options.title));
+      var body = mk('div', 'modal-body');
+      if (options.label) body.appendChild(mk('label', 'modal-text', options.label));
+      var input = mk('input', 'modal-input');
+      input.type = 'text';
+      input.value = str(options.value) || '';
+      input.placeholder = str(options.placeholder) || '';
+      if (options.maxLength) input.maxLength = options.maxLength;
+      body.appendChild(input);
+      modal.appendChild(body);
+      var actions = mk('div', 'modal-actions');
+      var finished = false;
+      function close(value) {
+        if (finished) return;
+        finished = true;
+        document.removeEventListener('keydown', onKey);
+        try { document.body.classList.remove('modal-open'); } catch (e) { /* ignore */ }
+        try { if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop); } catch (e2) { /* ignore */ }
+        resolve(value);
+      }
+      function submit() { close(input.value.trim() || null); }
+      function onKey(event) {
+        if (event.key === 'Escape') close(null);
+        if (event.key === 'Enter') { event.preventDefault(); submit(); }
+      }
+      var cancel = mk('button', 'btn', '取消');
+      cancel.type = 'button';
+      cancel.addEventListener('click', function () { close(null); });
+      actions.appendChild(cancel);
+      var save = mk('button', 'btn danger', '保存');
+      save.type = 'button';
+      save.addEventListener('click', submit);
+      actions.appendChild(save);
+      modal.appendChild(actions);
+      backdrop.appendChild(modal);
+      backdrop.addEventListener('click', function (event) {
+        if (event.target === backdrop) close(null);
+      });
+      document.body.appendChild(backdrop);
+      try { document.body.classList.add('modal-open'); } catch (e3) { /* ignore */ }
+      document.addEventListener('keydown', onKey);
+      setTimeout(function () { try { input.focus(); input.select(); } catch (e4) { /* ignore */ } }, 0);
+    });
+  }
+  function renameLocalProject(session, local) {
+    var current = str(local && local.name) || str(local && local.id) || '项目';
+    showPrompt({ title: '重命名项目', label: '项目名', value: current, maxLength: 120 })
+      .then(function (name) {
+        if (!name || name === current) return;
+        apiPost('/api/local-project/rename', {
+          projectId: str(session && session.id), localProjectId: str(local && local.id), name: name
+        }).then(function () {
+          toast('已重命名项目：' + name);
+          fetchState();
+        }).catch(function (err) { toast('重命名失败：' + err.message, 'err'); });
+      });
+  }
+  function renameTask(project, run) {
+    var current = str(run && run.title) || str(run && run.id) || '任务';
+    showPrompt({ title: '重命名任务', label: '任务名', value: current, maxLength: 200 })
+      .then(function (name) {
+        if (!name || name === current) return;
+        apiPost('/api/task/rename', {
+          projectId: str(project && project.id), taskId: str(run && run.id), name: name
+        }).then(function () {
+          toast('已重命名任务：' + name);
+          fetchState();
+        }).catch(function (err) { toast('重命名失败：' + err.message, 'err'); });
+      });
   }
   function deleteTask(project, run) {
     var projectName = str(project && project.name) || str(project && project.id) || '项目';

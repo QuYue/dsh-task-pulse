@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.4.0 — 2026-11-03
+
+- 网页版支持重命名：
+  - 逻辑 project 卡片 ✎ → 重命名 project；
+  - 任务列表「改名」→ 重命名 task；
+  - 任务详情页「重命名」；
+- 新增 `/api/local-project/rename` 与 `/api/task/rename`；
+- 重命名只改显示名，project id / task id / 目录 / 事件历史不变。
+
 ## v3.3.3 — 2026-11-03
 
 - 允许 agent 自己决定任务名：
