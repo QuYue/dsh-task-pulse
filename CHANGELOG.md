@@ -17,6 +17,15 @@
 - 通知：完成 / 失败 / 阻塞 / 计划升版 / 停滞；浏览器 + 系统通知
 - 默认不主动使用：用户要求或任务需要时才启用
 
+## v2.0.1 — 2026-11-03
+
+- 卡片宽度按 composer 的 `side-clearance` / `dock-inset` 对齐；
+- 安装补丁改为 `- insert:` 语法（原先裸 Loader 条目会被 profile 拒绝）；
+- 新增 `board.py ensure`：hub 未运行时后台拉起；
+- 新增 `board.py auto --title ...`：ensure + 为当前请求自动建任务并 start s1，
+  可 `--reuse` 复用最新 running 任务；供 `/live-progress` 一键使用；
+- 验证：卡片在 DSH 中显示；B2/B3/B4 联调通过；33 tests 通过。
+
 ## v2.0.0 — 2026-11-03
 
 DSH 输入框上方的 live-progress 卡片（与网页版并存）。

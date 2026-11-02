@@ -53,7 +53,7 @@ live-progress/
 ## 版本
 
 - **v1.0.0**（当前）：网页看板 + 文件驱动账本，详见 [CHANGELOG.md](CHANGELOG.md)
-- **v2.0.0**：DSH 输入框上方的原生进度卡片（与网页版并存），
+- **v2.0.1**：DSH 输入框上方的原生进度卡片（与网页版并存），
   规格见 [docs/v2-card-spec.md](docs/v2-card-spec.md)，安装见 [docs/b4-install.md](docs/b4-install.md)
 
 ## 一键启动
