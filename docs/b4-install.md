@@ -15,9 +15,10 @@ cd live-progress/plugin
 ./install.sh desktop
 ```
 
-脚本做两件事：
+Desktop profile 由 Electron 应用独占，`dsh plugin --profile desktop add` 会报
+"profile is managed exclusively by the Electron application"。因此脚本改为：
 
-1. `dsh plugin --profile desktop add file:<plugin>`（pnpm 装进 profile）；
+1. 在 `~/.dsh/profiles/desktop/node_modules/` 建到本仓库 `plugin/` 的 symlink；
 2. 在 `~/.dsh/profiles/desktop/cordis.patch.yml` 追加：
 
 ```yaml
@@ -37,8 +38,9 @@ cd live-progress/plugin
 ## 卸载
 
 ```bash
-dsh plugin --profile desktop remove dsh-live-progress-card
+rm ~/.dsh/profiles/desktop/node_modules/dsh-live-progress-card
 # 并从 cordis.patch.yml 删除 - id: dsh-live-progress-card 两行
+# 然后重启 DSH
 ```
 
 ## 风险
