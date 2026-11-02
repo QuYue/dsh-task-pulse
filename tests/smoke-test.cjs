@@ -64,6 +64,14 @@ const after = Date.parse('2026-01-01T00:15:00+08:00')
 assert(captured.exports.__selectTask(state, 'sess-1', before).id === 'new', 'selects latest task before next prompt')
 assert(captured.exports.__selectTask(state, 'sess-1', after) === null, 'hides task after new prompt')
 assert(captured.exports.__selectTask(state, 'other', before) === null, 'hides other sessions')
+const continuedState = {
+  projects: [{
+    id: 'sess-3',
+    runs: [{ id: 'continued', startedAt: '2026-01-01T00:00:00+08:00', updatedAt: '2026-01-01T00:10:00+08:00', status: 'running' }],
+  }],
+}
+assert(captured.exports.__selectTask(continuedState, 'sess-3', before).id === 'continued', 'continued task stays visible by activity time')
+assert(captured.exports.__selectTask(continuedState, 'sess-3', after) === null, 'next prompt hides continued task')
 const projectState = {
   projects: [{
     id: 'sess-2',

@@ -138,7 +138,8 @@ $BOARD auto --title "内容首行" --reuse
 `/task-pulse` 只加载本文件，不会自动创建任务或写事件。继续一个已存在的任务时：
 
 1. 先 `$BOARD status`，确认当前进行中的步骤；
-2. 开始任何工作前 `$BOARD start <step> --agent ...`；
+2. 继续已有任务/同一个 step 前，先 `$BOARD heartbeat --agent ... --current "继续任务"`，刷新任务活跃时间（卡片按活跃时间决定是否显示）；
+3. 开始新 step 前 `$BOARD start <step> --agent ...`；
 3. 每个工具边界至少 `heartbeat` 或 `report`，步骤结束 `done` / `fail`；
 4. 最终答复前自查：是否还有步骤停在进行中却没有解释。
 

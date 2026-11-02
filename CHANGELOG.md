@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.5.0 — 2026-11-03
+
+- 卡片可见性从 `startedAt` 改为「最近活跃时间」：
+  - `max(startedAt, updatedAt)` 与最后一条用户消息比较；
+  - 完成后仍保留，下一次用户消息隐藏；
+- `/tp task update` / `task auto` 继续任务时自动写一次 heartbeat，刷新活跃时间；
+- agent 直接继续旧任务时，SKILL 要求先 heartbeat；
+- smoke test 增加继续任务场景。
+
 ## v3.4.7 — 2026-11-03
 
 - Host 插件加载时自动执行 `board.py ensure`，DSH 重启后 8770 hub 不再需要手动启动；

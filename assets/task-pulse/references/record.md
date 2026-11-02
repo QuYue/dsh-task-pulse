@@ -49,7 +49,7 @@ $BOARD exec s5 --agent bg-1 --heartbeat 30 --timeout 1800 -- pytest -q
 
 ## 3. 心跳
 
-没有用 `exec` 的短步骤，在工具边界用：
+继续已有任务或同一个 step 前，先写一次 heartbeat 刷新活跃时间；没有用 `exec` 的短步骤，在工具边界用：
 
 ```bash
 $BOARD heartbeat --agent coder --step s3 --current "正在写 test_json 用例"
