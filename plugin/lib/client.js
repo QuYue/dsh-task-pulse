@@ -222,8 +222,15 @@ window.__ModuleLoader__.load({
         : undefined;
 
       const [snapshot, setSnapshot] = React.useState(null);
-      const [open, setOpen] = React.useState(false);
+      const storageKey = "dsh-lp-card-open:" + (sessionId || "unknown");
+      const [open, setOpen] = React.useState(() => {
+        try { return localStorage.getItem(storageKey) === "1"; } catch (e) { return false; }
+      });
       const [notes, setNotes] = React.useState({});
+
+      React.useEffect(() => {
+        try { localStorage.setItem(storageKey, open ? "1" : "0"); } catch (e) { /* ignore */ }
+      }, [storageKey, open]);
 
       React.useEffect(() => {
         if (!sessionId) return undefined;
@@ -271,6 +278,7 @@ window.__ModuleLoader__.load({
 
       const head = h("div", {
         className: "dsh-lp-head", role: "button", tabIndex: 0,
+        "aria-expanded": open ? "true" : "false",
         title: open ? "收起任务进度" : "展开任务进度",
         onClick: toggle,
         onKeyDown: (event) => {
@@ -356,7 +364,8 @@ window.__ModuleLoader__.load({
             )
           ),
           h("div", { className: "dsh-lp-actions" },
-            h("a", { className: "dsh-lp-link", href: boardHref, target: "_blank", rel: "noreferrer" }, "打开完整看板 8770"),
+            h("a", { className: "dsh-lp-link", href: boardHref, target: "_blank", rel: "noreferrer",
+              title: "在浏览器打开任务进度表" }, "打开完整看板 8770"),
             h("button", { type: "button", className: "dsh-lp-btn", onClick: toggle }, "收起")
           )
         );
