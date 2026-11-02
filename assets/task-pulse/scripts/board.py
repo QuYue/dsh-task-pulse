@@ -1025,11 +1025,31 @@ def build_global_state(home: Path, now: datetime | None = None) -> dict:
         runs.sort(key=lambda run: ts_key(run.get("updatedAt")), reverse=True)
         last_activity = max((run.get("updatedAt") for run in runs if run.get("updatedAt")),
                             key=ts_key, default=None)
+        local_projects = []
+        if project.get("kind") == "local" and base.exists():
+            current_pointer = read_json(base / "current_project.json") or {}
+            current_local = str(current_pointer.get("projectId") or "")
+            for local_dir in list_local_projects(base):
+                meta = _project_meta(local_dir)
+                local_tasks = run_dirs(local_dir)
+                local_running = 0
+                for local_run in local_tasks:
+                    local_view = build_run_view(local_run, now)
+                    if local_view and local_view.get("status") == "running":
+                        local_running += 1
+                local_projects.append({
+                    "id": local_dir.name,
+                    "name": str(meta.get("name") or local_dir.name),
+                    "current": local_dir.name == current_local,
+                    "tasks": len(local_tasks),
+                    "running": local_running,
+                })
         projects.append({
             "id": project["id"],
             "name": project_name,
             "color": project.get("color") or hash_color(project["id"]),
             "kind": project.get("kind", "local"),
+            "localProjects": local_projects,
             "sourceStatus": status,
             "lastActivityAt": last_activity,
             "runs": runs,
@@ -1189,6 +1209,21 @@ class Hub:
                     continue
             except Exception:
                 continue
+            for pointer_file in ("current_project.json",):
+                try:
+                    items.append((str(base / pointer_file), (base / pointer_file).stat().st_mtime_ns))
+                except OSError:
+                    pass
+            local_projects = base / "projects"
+            if local_projects.is_dir():
+                for local_dir in sorted(local_projects.iterdir()):
+                    if not local_dir.is_dir():
+                        continue
+                    for meta_file in ("project.json", "current_task.json"):
+                        try:
+                            items.append((str(local_dir / meta_file), (local_dir / meta_file).stat().st_mtime_ns))
+                        except OSError:
+                            pass
             for run_dir in self._runs(base):
                 plan_file = run_dir / "plan.json"
                 try:

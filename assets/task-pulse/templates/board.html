@@ -208,6 +208,8 @@
   .pc-run { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .pc-run-title { flex: 1 1 auto; min-width: 0; font-size: 13px; color: #cfd9e6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pc-nodata { font-size: 12px; color: var(--dim); }
+  .pc-locals { display: flex; flex-wrap: wrap; gap: 4px; margin: 7px 0 2px; align-items: center; }
+  .pc-locals-label { color: #7e8da3; font-size: 10.5px; margin-right: 2px; }
   .pc-agents { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: rgba(255, 255, 255, .022); border: 1px solid var(--border-soft); border-radius: 8px; }
   .pc-agents-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10.5px; letter-spacing: .2px; color: var(--dim); margin-bottom: 1px; }
   .pc-agents-count { font-variant-numeric: tabular-nums; }
@@ -1557,6 +1559,18 @@
       agentsWrap.appendChild(span('pc-agent-none', agents.length ? '暂无活跃 Agent' : '暂无 Agent'));
     }
     card.appendChild(agentsWrap);
+
+    var locals = arr(project.localProjects);
+    if (locals.length) {
+      var localWrap = mk('div', 'pc-locals');
+      localWrap.appendChild(span('pc-locals-label', '项目'));
+      for (var li = 0; li < locals.length; li++) {
+        var lp = locals[li];
+        var label = (lp.current ? '● ' : '') + str(lp.name) + (lp.tasks ? ' · ' + lp.tasks : ' · 空');
+        localWrap.appendChild(mk('span', lp.current ? 'chip accent' : 'chip', label));
+      }
+      card.appendChild(localWrap);
+    }
 
     var foot = mk('div', 'pc-foot');
     var rc = revChip(run && run.revision);

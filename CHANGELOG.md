@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.2.1 — 2026-11-03
+
+- 修复 `/tp` Host 使用可变 cwd 的默认 hub home，导致 8770 重启后 registry 为空；
+  现在固定使用 `~/.dsh/progress` 作为共享 hub home；
+- 看板 session 卡片新增逻辑项目列表（即使 0 任务也显示）；
+- 当前项目无任务时卡片不再回退显示其他项目的旧任务；
+- hub 状态缓存加入 current_project/project.json/current_task 变化检测。
+
 ## v3.2.0 — 2026-11-03
 
 - Project 层：Session 下支持多个逻辑 Project；
