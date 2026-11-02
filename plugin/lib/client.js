@@ -20,7 +20,18 @@ window.__ModuleLoader__.load({
 .dsh-lp-head { padding: 6px 10px 7px; cursor: pointer; user-select: none; }
 .dsh-lp-head:hover { background: rgba(127,127,127,.06); border-radius: 9px; }
 .dsh-lp-line1 { display: flex; align-items: center; gap: 6px; }
-.dsh-lp-line2 { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding-left: 13px; }
+.dsh-lp-line2 { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; padding-left: 13px; }
+.dsh-lp-active-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.dsh-lp-state {
+  display: inline-flex; align-items: center; gap: 4px; flex: none;
+  font-size: 10.5px; color: #8fc1ff; background: rgba(79,140,255,.12);
+  border: 1px solid rgba(79,140,255,.3); border-radius: 4px; padding: 0 5px;
+}
+.dsh-lp-state .dsh-lp-dot { width: 5px; height: 5px; }
+.dsh-lp-step-name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary, #8b98ab); font-size: 11px;
+}
 .dsh-lp-current {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--dsw-alias-label-tertiary, #8b98ab); font-size: 11px;
@@ -136,7 +147,7 @@ window.__ModuleLoader__.load({
         { id: "s1", size: "S", title: "调整 size/进度布局", status: "done", owner: "lead", progress: null, start: "18:40:12", end: "18:44:03", elapsed: "3m51s" },
         { id: "s2", size: "M", title: "压缩行高与进度条展示", status: "done", owner: "lead", progress: null, start: "18:44:03", end: "18:52:20", elapsed: "8m17s" },
         { id: "s3", size: "S", title: "增加开始/结束时间列", status: "doing", owner: "coder", progress: 45, start: "18:52:20", end: "", elapsed: "3m", note: "等待接口字段确认" },
-        { id: "s4", size: "S", title: "补充 v2 文档", status: "wait", owner: "", progress: null, start: "", end: "", elapsed: "" },
+        { id: "s4", size: "M", title: "补充 v2 文档", status: "doing", owner: "tester", progress: 30, start: "18:52:20", end: "", elapsed: "3m" },
         { id: "s5", size: "S", title: "测试与页面校验", status: "wait", owner: "", progress: null, start: "", end: "", elapsed: "" }
       ]
     };
@@ -168,7 +179,7 @@ window.__ModuleLoader__.load({
       const toggle = () => setOpen((v) => !v);
       const toggleNote = (id) => setNotes((prev) => Object.assign({}, prev, { [id]: !prev[id] }));
 
-      const currentStep = SAMPLE.steps.find((step) => step.status === "doing");
+      const activeSteps = SAMPLE.steps.filter((step) => step.status === "doing");
       const doneCount = SAMPLE.steps.filter((step) => step.status === "done").length;
       const totalCount = SAMPLE.steps.length;
       const taskPct = totalCount ? Math.round(doneCount / totalCount * 100) : 0;
@@ -191,21 +202,26 @@ window.__ModuleLoader__.load({
           h("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸")
         ),
         h("div", { className: "dsh-lp-line2" },
-          currentStep
-            ? [
-                h("span", { className: "dsh-lp-current", key: "label" }, "正在："),
-                currentStep.progress != null
-                  ? h("span", { className: "dsh-lp-step-progress", key: "progress" },
-                      h("span", { className: "dsh-lp-bar" },
-                        h("span", { className: "dsh-lp-bar-fill",
-                          style: { width: Math.max(0, Math.min(100, currentStep.progress)) + "%" } })
-                      ),
-                      h("span", { className: "dsh-lp-summary-pct" }, currentStep.progress + "%")
-                    )
-                  : null,
-                h("span", { className: "dsh-lp-current", key: "step" },
-                  currentStep.id + " " + currentStep.title)
-              ]
+          activeSteps.length
+            ? activeSteps.map((step) => {
+                const st = statusOf(step);
+                return h("div", { className: "dsh-lp-active-row", key: step.id },
+                  h("span", { className: "dsh-lp-state" },
+                    h("span", { className: "dsh-lp-dot " + st.dot }),
+                    h("span", null, st.label)
+                  ),
+                  step.progress != null
+                    ? h("span", { className: "dsh-lp-step-progress" },
+                        h("span", { className: "dsh-lp-bar" },
+                          h("span", { className: "dsh-lp-bar-fill",
+                            style: { width: Math.max(0, Math.min(100, step.progress)) + "%" } })
+                        ),
+                        h("span", { className: "dsh-lp-summary-pct" }, step.progress + "%")
+                      )
+                    : null,
+                  h("span", { className: "dsh-lp-step-name" }, step.id + " " + step.title)
+                );
+              })
             : h("span", { className: "dsh-lp-current" }, "等待下一步")
         )
       );
