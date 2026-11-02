@@ -432,6 +432,7 @@ def normalize_plan(raw: dict, run_id: str) -> dict:
             "dependsOn": [slugify(dep, "s") for dep in (step.get("dependsOn") or [])],
             "note": str(step.get("note") or ""),
             "superseded": bool(step.get("superseded")),
+            "order": _step_order(step.get("order"), index),
         })
     if not steps:
         raise ValueError("plan.steps must contain at least one step")
@@ -538,6 +539,13 @@ def _event_evidence(event: dict) -> list:
     return []
 
 
+def _step_order(value, index: int) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float((index + 1) * 10)
+
+
 def _coerce_percent(value):
     try:
         number = int(float(value))
@@ -603,7 +611,16 @@ def build_run_view(run_dir: Path, now: datetime | None = None) -> dict | None:
     step_ids = {step["id"] for step in plan_steps}
     step_views = []
     by_id = {}
-    for step in plan_steps:
+    phase_index = {phase["id"]: index for index, phase in enumerate(plan.get("phases") or [])}
+    ordered_steps = [step for _, step in sorted(
+        enumerate(plan_steps),
+        key=lambda pair: (
+            phase_index.get(pair[1].get("phaseId"), 999),
+            _step_order(pair[1].get("order"), pair[0]),
+            pair[0],
+        ),
+    )]
+    for step in ordered_steps:
         record = states.get(step["id"], {})
         superseded = bool(step.get("superseded"))
         status = "superseded" if superseded else record.get("status", "pending")
@@ -1225,6 +1242,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
         for key, value in (extra_headers or {}).items():
             self.send_header(key, value)
         self.end_headers()
@@ -1245,6 +1263,14 @@ class Handler(BaseHTTPRequestHandler):
         if length <= 0:
             return b""
         return self.rfile.read(min(length, 8 * 1024 * 1024))
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -1344,6 +1370,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
         self.send_header("X-Accel-Buffering", "no")
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         queue = self.hub.register_client()
         try:

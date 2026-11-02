@@ -98,6 +98,8 @@ See `docs/state.sample.json`. Notable fields:
 - `projects[].runs[].agents[].status`: `working | idle | blocked | done`; `stalled` bool;
   `lastSeenAgoSec` number; `currentStep` / `currentText` strings.
 - `steps[].status`: `pending | in_progress | blocked | done | failed | skipped | superseded`.
+- `steps[].order`: optional numeric display order within a phase; lower comes first.
+  `revise` should set it when inserting a new step into an existing phase.
 - `steps[].progress`: 0-100 or null (latest `report`/`heartbeat --percent`; `done` forces 100).
 - `steps[].evidence`: optional paths/URLs proving completion; `note` is free text.
 - `runs[].sessionId`, `runs[].taskTitle`, `runs[].title` (task display name with time).

@@ -49,6 +49,8 @@ BOARD="python3 .dsh/skills/live-progress/scripts/board.py"
 ## 启动任务（主 agent，任务分配后的第一个动作）
 
 1. 粗估 3–8 个阶段、每步 5–15 分钟粒度；每步写清 `owner`、`size`、`acceptance`、`dependsOn`。
+   每步可选 `order`（数值越小越靠前）；`revise` 新增步骤时指定 `order` 即可插到目标位置，
+   不指定则按数组顺序排在末尾。
    把计划写入临时文件 `plan.v1.json`：
 
    ```json
