@@ -225,7 +225,7 @@ window.__ModuleLoader__.load({
                         h("span", { className: "dsh-lp-summary-pct" }, step.progress + "%")
                       )
                     : null,
-                  h("span", { className: "dsh-lp-step-name" }, "s" + stepNo(step) + " " + step.title)
+                  h("span", { className: "dsh-lp-step-name" }, "#" + stepNo(step) + " " + step.title)
                 );
               })
             : h("span", { className: "dsh-lp-current" }, "等待下一步")
@@ -239,7 +239,7 @@ window.__ModuleLoader__.load({
           const cells = [
             h("td", { key: "st", style: { color: st.color, whiteSpace: "nowrap" } }, st.label),
             h("td", { key: "title" },
-              h("span", { className: "dsh-lp-id" }, "s" + stepNo(step) + " | " + step.size),
+              h("span", { className: "dsh-lp-id" }, "#" + stepNo(step) + " | " + step.size),
               h("span", { className: "dsh-lp-title" }, step.title),
               step.note ? h("button", { key: "note", type: "button", className: "dsh-lp-note-mark",
                 onClick: (e) => { e.stopPropagation(); toggleNote(step.id); } }, "注") : null

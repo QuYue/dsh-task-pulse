@@ -968,7 +968,7 @@
   function depChip(id, byId) {
     var st = byId ? byId.get(id) : null;
     var seq = st ? parseInt(st.seq, 10) || 0 : 0;
-    var shown = seq ? 's' + seq : id;
+    var shown = seq ? '#' + seq : id;
     var el = mk('span', 'chip dep', shown);
     if (st) el.title = '依赖步骤：' + shown + '（' + id + '）· ' + (str(st.title) || id) + ' · ' + statusLabel(STEP_STATUS, st.status);
     else el.title = '依赖步骤 ' + shown;
@@ -1084,7 +1084,7 @@
     var titleLine = mk('div', 'step-title-line');
     var id = str(step.id);
     var seq = parseInt(step.seq, 10) || 0;
-    var shown = seq ? 's' + seq : id;
+    var shown = seq ? '#' + seq : id;
     var tagBits = [];
     if (shown) tagBits.push(shown);
     if (str(step.size)) tagBits.push(str(step.size));
@@ -1587,7 +1587,7 @@
       title = str(stepView.title);
       seq = parseInt(stepView.seq, 10) || 0;
     }
-    var shown = seq ? 's' + seq : stepId;
+    var shown = seq ? '#' + seq : stepId;
     var stepText = title ? shown + ' · ' + title : shown;
     if (!stepText) stepText = str(agent.currentText) || '—';
     row.appendChild(span('pc-agent-step', stepText));
@@ -1736,7 +1736,7 @@
       title = str(stepView.title);
       seq = parseInt(stepView.seq, 10) || 0;
     }
-    var shown = seq ? 's' + seq : stepId;
+    var shown = seq ? '#' + seq : stepId;
     var line = mk('div', 'lane-step-line');
     if (stepId) line.appendChild(mk('span', 'chip ev-step', shown));
     line.appendChild(span('lane-step-title', title || (stepId ? '' : '—')));
@@ -1870,7 +1870,7 @@
     if (stepId) {
       var stepView = stepsById && stepsById.get(stepId);
       var seq = stepView ? parseInt(stepView.seq, 10) || 0 : 0;
-      var shown = seq ? 's' + seq : stepId;
+      var shown = seq ? '#' + seq : stepId;
       var stepBtn = mk('button', 'chip ev-step ev-step-btn', shown);
       stepBtn.type = 'button';
       stepBtn.title = '跳转到步骤 ' + shown + '（内部 id: ' + stepId + '）';

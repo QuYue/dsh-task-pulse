@@ -90,8 +90,8 @@ BOARD="python3 .dsh/skills/live-progress/scripts/board.py"
 ## 展示序号与内部 id
 
 - `plan.steps[].id` 是**稳定内部主键**，事件、`start/done` 命令都用它；
-- 看板/卡片显示 `s1..sN`，这是**当前真实顺序的展示序号**（`view.steps[].seq`），
-  会随 `revise` 插入/重排而变化；不要用展示序号反推内部 id；
+- 看板/卡片显示 `#1..#N`，这是**当前真实顺序的展示序号**（`view.steps[].seq`），
+  会随 `revise` 插入/重排而变化；内部 id 只用 `s` 前缀（如 `s7`），两者不要混用；
 - `order` 决定真实顺序；已完成步骤自然排在前面，新增步骤用 `order` 插入。
 
 ## 继续已有任务（强制）

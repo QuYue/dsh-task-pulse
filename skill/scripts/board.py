@@ -1506,7 +1506,7 @@ def _print_run_summary(view: dict, args) -> None:
               f"{current}  (最后事件 {fmt_ago(agent.get('lastSeenAgoSec'))})")
     print("步骤:")
     for step in view["steps"]:
-        print(f"  {step['id']:<8} {STATUS_ZH.get(step['status'], step['status']):<6} "
+        print(f"  #{step.get('seq', '?'):<3} {step['id']:<8} {STATUS_ZH.get(step['status'], step['status']):<6} "
               f"{step['owner']:<10} {step['title']}  "
               f"({fmt_duration(step.get('elapsedMs'))})"
               + (f"  {step['progress']}%" if step.get("progress") is not None else ""))
