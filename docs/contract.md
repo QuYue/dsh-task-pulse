@@ -96,6 +96,7 @@ See `docs/state.sample.json`. Notable fields:
   `lastSeenAgoSec` number; `currentStep` / `currentText` strings.
 - `steps[].status`: `pending | in_progress | blocked | done | failed | skipped | superseded`.
 - `steps[].progress`: 0-100 or null (latest `report`/`heartbeat --percent`; `done` forces 100).
+- `steps[].evidence`: optional paths/URLs proving completion; `note` is free text.
 - `runs[].sessionId`, `runs[].taskTitle`, `runs[].title` (task display name with time).
 - `steps[].blockedBy`: ids of unfinished dependencies (only meaningful for non-terminal steps).
 - `progress.percent` is `round(done / total * 100)`; `total` excludes `skipped`/`superseded`.

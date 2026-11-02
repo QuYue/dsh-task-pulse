@@ -121,7 +121,8 @@ $BOARD report s5 --percent 60 --agent bg-1 --current "读取数据 60%"
 2. **允许并行**：无依赖的步骤可以同时 `in_progress`；依赖未完成的步骤会被看板标成 `blockedBy`。
 3. **不伪造进度**：心跳只反映真实动作；长命令起后台 job，用 `job_output` 有界轮询（单次 ≤60s），
    每轮写心跳。禁止一次 `wait` 十分钟不更新。
-4. **证据**：`done` 至少带一个 `--evidence`（文件、日志、测试输出路径）。
+4. **证据（可选）**：有可验证产物（文件、日志、测试输出、URL）时建议用 `--evidence` 附上；
+   没有文件产物的步骤用 `--note` 说明即可，不强制。看板会把证据显示为「证据」列。
 5. **失败不掩盖**：`fail` 是终态；修复要新增一步，不能把 failed 改成 done。
 6. **子 agent**：只追加自己的事件，不修改 `plan.json`；需要改计划 → 发消息给 Lead。
    派生子 agent 时，把下面这段放进 spawn prompt，并给出它的 step id：
@@ -137,14 +138,16 @@ $BOARD report s5 --percent 60 --agent bg-1 --current "读取数据 60%"
    只追加事件，不修改 plan.json；计划要变就发消息给 Lead。
    ```
 
-7. **计划变更**：Lead 用 `revise` 提交完整新计划并说明原因；被取消的步骤会自动标为
+7. **Lead 随时可介入进度**：用 `report <step> --percent N --agent lead` 调整任意步骤进度；
+   必要时用 `start/done/block` 代为推进；改步骤结构用 `revise`，不要直接改 plan.json。
+8. **计划变更**：Lead 用 `revise` 提交完整新计划并说明原因；被取消的步骤会自动标为
    `superseded` 保留历史，不删除、不复用 id。
 
    ```bash
    $BOARD revise --plan-file plan.v2.json --reason "用户追加 CSV 需求" --by lead
    ```
 
-8. **收尾**：所有步骤终态后 `$BOARD close --by lead`；最终回复里给出
+9. **收尾**：所有步骤终态后 `$BOARD close --by lead`；最终回复里给出
    `BOARD.md` 路径与一句汇总，必要时 `present` 它。
 
 ## 查询与排障

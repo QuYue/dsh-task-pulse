@@ -24,7 +24,7 @@ $BOARD resume s3 --agent coder
 ```
 
 - 一次只做一个 step；只有该 step 的 owner（或 lead）能改它。
-- `done` 必须带至少一个 `--evidence`（文件/日志/测试输出路径）。
+- `done` 建议带 `--evidence`（文件/日志/测试输出/URL）；没有可验证产物时用 `--note` 说明即可，不强制。
 - 失败是终态：修复要新增一步，不要把 failed 改成 done。
 
 ## 2. 长命令 / 后台任务：用 `exec` 自动记账
