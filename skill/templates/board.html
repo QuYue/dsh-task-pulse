@@ -99,6 +99,42 @@
   .page-title { margin: 0; font-size: 19px; letter-spacing: .2px; }
   .page-sub { margin: 5px 0 0; color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+  .section-head { display: flex; align-items: center; gap: 10px; margin: 20px 0 10px; }
+  .section-title { font-size: 14px; margin: 0; color: #cfd9e6; letter-spacing: .3px; }
+  .section-hint { font-size: 11.5px; color: var(--dim); }
+  .task-list { margin-top: 4px; }
+  .task-list-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .task-list-title { font-size: 15px; margin: 0; color: var(--text); }
+  .task-list-count { font-size: 11.5px; color: var(--muted); }
+  .tasks-wrap { overflow-x: auto; margin: 0 -4px; }
+  table.tasks { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+  .tasks thead th {
+    text-align: left; font-weight: 500; font-size: 10.5px; letter-spacing: .6px;
+    text-transform: uppercase; color: var(--dim); padding: 0 8px 7px; white-space: nowrap;
+  }
+  .tasks td { padding: 8px; border-top: 1px solid var(--border-soft); vertical-align: middle; }
+  .tasks tr.task-row { cursor: pointer; }
+  .tasks tr.task-row:hover td { background: rgba(79, 140, 255, .045); }
+  .tasks tr.task-row:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+  .tasks th:nth-child(1) { width: 92px; }
+  .tasks th:nth-child(2) { width: 150px; }
+  .tasks th:nth-child(3) { width: 30%; }
+  .tasks th:nth-child(4) { width: 190px; }
+  .tasks th:nth-child(5) { width: 24%; }
+  .tasks th:nth-child(6) { width: 84px; }
+  .tasks th:nth-child(7) { width: 96px; }
+  .task-project { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .task-project-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+  .task-project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-title { color: #dbe5f0; overflow-wrap: anywhere; }
+  .task-title-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .task-sub { display: block; margin-top: 1px; font-size: 10.5px; color: var(--dim); font-family: var(--mono); }
+  .task-current { color: var(--muted); overflow-wrap: anywhere; }
+  .task-current-extra { font-size: 10.5px; color: var(--dim); margin-left: 4px; }
+  .tasks .progress { max-width: 180px; }
+  .tasks .progress-meta { font-size: 10.5px; }
+  .tasks .progress-track { height: 5px; }
+  .task-muted { color: var(--dim); }
 
   /* ---------- chips / pills ---------- */
   .chip {
@@ -995,6 +1031,122 @@
   }
 
   /* ---------- overview ---------- */
+  function runPageUrl(project, run) {
+    return '/r/' + encodeURIComponent(str(project && project.id)) + '/' + encodeURIComponent(str(run && run.id));
+  }
+  function allRunRows(projects) {
+    var rows = [];
+    for (var i = 0; i < projects.length; i++) {
+      var project = projects[i];
+      var runs = arr(project && project.runs);
+      for (var j = 0; j < runs.length; j++) {
+        if (isObj(runs[j])) rows.push({ project: project, run: runs[j] });
+      }
+    }
+    rows.sort(function (a, b) {
+      var ar = str(a.run.status) === 'running' ? 0 : 1;
+      var br = str(b.run.status) === 'running' ? 0 : 1;
+      if (ar !== br) return ar - br;
+      var at = Date.parse(str(a.run.updatedAt)) || 0;
+      var bt = Date.parse(str(b.run.updatedAt)) || 0;
+      return bt - at;
+    });
+    return rows;
+  }
+  function taskListView(projects) {
+    var rows = allRunRows(projects);
+    if (!rows.length) return null;
+    var running = 0;
+    for (var k = 0; k < rows.length; k++) {
+      if (str(rows[k].run.status) === 'running') running++;
+    }
+    var card = mk('section', 'card task-list');
+    var head = mk('div', 'task-list-head');
+    head.appendChild(mk('h2', 'task-list-title', '全部任务'));
+    head.appendChild(span('task-list-count', rows.length + ' 个任务 · ' + running + ' 个进行中 · 点击行查看步骤'));
+    card.appendChild(head);
+
+    var wrap = mk('div', 'tasks-wrap');
+    var table = mk('table', 'tasks');
+    var thead = mk('thead');
+    var headRow = mk('tr');
+    var labels = ['状态', '项目', '任务', '进度', '当前', '计划', '最后更新'];
+    for (var h = 0; h < labels.length; h++) headRow.appendChild(mk('th', '', labels[h]));
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    var tbody = mk('tbody');
+    for (var i = 0; i < rows.length; i++) tbody.appendChild(taskRow(rows[i].project, rows[i].run));
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    card.appendChild(wrap);
+    return card;
+  }
+  function taskRow(project, run) {
+    var url = runPageUrl(project, run);
+    var tr = mk('tr', 'task-row');
+    tr.tabIndex = 0;
+
+    var statusCell = mk('td');
+    statusCell.appendChild(statusPill(RUN_STATUS, run.status));
+    tr.appendChild(statusCell);
+
+    var projectCell = mk('td');
+    var pwrap = mk('div', 'task-project');
+    var dot = mk('span', 'task-project-dot');
+    var dotColor = safeColor(project && project.color, '');
+    if (dotColor) dot.style.background = dotColor;
+    pwrap.appendChild(dot);
+    pwrap.appendChild(span('task-project-name', str(project && project.name) || str(project && project.id)));
+    projectCell.appendChild(pwrap);
+    tr.appendChild(projectCell);
+
+    var titleCell = mk('td');
+    var titleLine = mk('div', 'task-title-line');
+    titleLine.appendChild(span('task-title', str(run.title) || '未命名运行'));
+    titleCell.appendChild(titleLine);
+    titleCell.appendChild(span('task-sub', str(run.id)));
+    tr.appendChild(titleCell);
+
+    var progressCell = mk('td');
+    progressCell.appendChild(progressBar(progressOf(run), false));
+    tr.appendChild(progressCell);
+
+    var currentCell = mk('td');
+    var agents = arr(run.agents);
+    var active = [];
+    for (var a = 0; a < agents.length; a++) {
+      var ast = str(agents[a] && agents[a].status);
+      if (ast === 'working' || ast === 'blocked') active.push(agents[a]);
+    }
+    if (active.length) {
+      var first = active[0];
+      currentCell.appendChild(span('task-current', str(first.name) + ' · ' + (str(first.currentText) || str(first.currentStep) || '处理中')));
+      if (active.length > 1) currentCell.appendChild(span('task-current-extra', '+' + (active.length - 1)));
+    } else if (str(run.status) === 'completed') {
+      currentCell.appendChild(span('task-muted', '已结束'));
+    } else {
+      currentCell.appendChild(span('task-muted', '—'));
+    }
+    tr.appendChild(currentCell);
+
+    var revCell = mk('td');
+    var rc = revChip(run.revision);
+    if (rc) revCell.appendChild(rc);
+    tr.appendChild(revCell);
+
+    var timeCell = mk('td');
+    timeCell.appendChild(agoEl(str(run.updatedAt), null));
+    tr.appendChild(timeCell);
+
+    tr.addEventListener('click', function () { navigate(url); });
+    tr.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        navigate(url);
+      }
+    });
+    return tr;
+  }
   function overviewView() {
     var projects = getProjects();
     var page = mk('div', 'page');
@@ -1003,6 +1155,12 @@
       page.appendChild(emptyBox('还没有项目。用 board.py init 注册项目后，项目卡片会自动出现在这里。'));
       return page;
     }
+    var list = taskListView(projects);
+    if (list) page.appendChild(list);
+    var cardsHead = mk('div', 'section-head');
+    cardsHead.appendChild(mk('h2', 'section-title', '项目'));
+    cardsHead.appendChild(span('section-hint', '按项目聚合的当前状态'));
+    page.appendChild(cardsHead);
     var cards = mk('div', 'cards');
     for (var i = 0; i < projects.length; i++) {
       if (isObj(projects[i])) cards.appendChild(projectCard(projects[i]));
