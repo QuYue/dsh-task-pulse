@@ -191,17 +191,22 @@ window.__ModuleLoader__.load({
           h("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸")
         ),
         h("div", { className: "dsh-lp-line2" },
-          currentStep && currentStep.progress != null
-            ? h("span", { className: "dsh-lp-step-progress" },
-                h("span", { className: "dsh-lp-bar" },
-                  h("span", { className: "dsh-lp-bar-fill",
-                    style: { width: Math.max(0, Math.min(100, currentStep.progress)) + "%" } })
-                ),
-                h("span", { className: "dsh-lp-summary-pct" }, currentStep.progress + "%")
-              )
-            : null,
-          h("span", { className: "dsh-lp-current" },
-            currentStep ? ("正在：" + currentStep.id + " " + currentStep.title) : "等待下一步")
+          currentStep
+            ? [
+                h("span", { className: "dsh-lp-current", key: "label" }, "正在："),
+                currentStep.progress != null
+                  ? h("span", { className: "dsh-lp-step-progress", key: "progress" },
+                      h("span", { className: "dsh-lp-bar" },
+                        h("span", { className: "dsh-lp-bar-fill",
+                          style: { width: Math.max(0, Math.min(100, currentStep.progress)) + "%" } })
+                      ),
+                      h("span", { className: "dsh-lp-summary-pct" }, currentStep.progress + "%")
+                    )
+                  : null,
+                h("span", { className: "dsh-lp-current", key: "step" },
+                  currentStep.id + " " + currentStep.title)
+              ]
+            : h("span", { className: "dsh-lp-current" }, "等待下一步")
         )
       );
 

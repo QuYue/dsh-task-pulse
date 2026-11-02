@@ -167,15 +167,17 @@ function render() {
         el("span", { className: "dsh-lp-count" }, "· " + doneCount + "/" + totalCount)),
       el("span", { className: "dsh-lp-chevron" }, open ? "▾" : "▸")),
     el("div", { className: "dsh-lp-line2" },
-      currentStep && currentStep.progress != null
-        ? el("span", { className: "dsh-lp-step-progress" },
-            el("span", { className: "dsh-lp-bar" },
-              el("span", { className: "dsh-lp-bar-fill",
-                style: "width:" + Math.max(0, Math.min(100, currentStep.progress)) + "%" })),
-            el("span", { className: "dsh-lp-summary-pct" }, currentStep.progress + "%"))
-        : null,
-      el("span", { className: "dsh-lp-current" },
-        currentStep ? ("正在：" + currentStep.id + " " + currentStep.title) : "等待下一步")));
+      currentStep
+        ? [el("span", { className: "dsh-lp-current" }, "正在："),
+           currentStep.progress != null
+             ? el("span", { className: "dsh-lp-step-progress" },
+                 el("span", { className: "dsh-lp-bar" },
+                   el("span", { className: "dsh-lp-bar-fill",
+                     style: "width:" + Math.max(0, Math.min(100, currentStep.progress)) + "%" })),
+                 el("span", { className: "dsh-lp-summary-pct" }, currentStep.progress + "%"))
+             : null,
+           el("span", { className: "dsh-lp-current" }, currentStep.id + " " + currentStep.title)]
+        : el("span", { className: "dsh-lp-current" }, "等待下一步")));
   head.addEventListener("click", () => { open = !open; render(); });
 
   let body = null;
