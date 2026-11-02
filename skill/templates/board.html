@@ -437,6 +437,25 @@
     transition: opacity .18s ease, transform .18s ease;
   }
   .toast.show { opacity: 1; transform: none; }
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 1000; background: rgba(4, 8, 14, .62);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal {
+    width: min(440px, calc(100vw - 40px)); background: var(--panel);
+    border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+  }
+  .modal-title { margin: 0 0 8px; font-size: 14px; font-weight: 650; color: var(--text); }
+  .modal-body { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+  .modal-text { margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+  .modal-actions .btn { padding: 5px 12px; font-size: 12px; }
+  .modal-actions .btn.danger {
+    color: #ffb3b9; border-color: rgba(255, 95, 109, .4); background: rgba(255, 95, 109, .08);
+  }
+  .modal-actions .btn.danger:hover { background: rgba(255, 95, 109, .18); }
+  body.modal-open { overflow: hidden; }
   .toast-warn { border-left-color: var(--amber); }
   .toast-err { border-left-color: var(--red); }
   .toast-msg { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
@@ -2063,31 +2082,95 @@
       });
     });
   }
+  function showDialog(options) {
+    options = options || {};
+    return new Promise(function (resolve) {
+      var backdrop = mk('div', 'modal-backdrop');
+      var modal = mk('div', 'modal');
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      if (options.title) modal.appendChild(mk('h3', 'modal-title', options.title));
+      if (options.body) {
+        var body = mk('div', 'modal-body');
+        String(options.body).split('\n').forEach(function (line) {
+          body.appendChild(mk('p', 'modal-text', line));
+        });
+        modal.appendChild(body);
+      }
+      var actions = mk('div', 'modal-actions');
+      var finished = false;
+      function close(value) {
+        if (finished) return;
+        finished = true;
+        document.removeEventListener('keydown', onKey);
+        try { document.body.classList.remove('modal-open'); } catch (e) { /* ignore */ }
+        try { if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop); } catch (e2) { /* ignore */ }
+        resolve(value);
+      }
+      function onKey(event) {
+        if (event.key === 'Escape') close(null);
+      }
+      (options.buttons || []).forEach(function (item) {
+        var button = mk('button', 'btn ' + (item.kind || ''), item.label);
+        button.type = 'button';
+        button.addEventListener('click', function () { close(item.value); });
+        actions.appendChild(button);
+      });
+      modal.appendChild(actions);
+      backdrop.appendChild(modal);
+      backdrop.addEventListener('click', function (event) {
+        if (event.target === backdrop) close(null);
+      });
+      document.body.appendChild(backdrop);
+      try { document.body.classList.add('modal-open'); } catch (e3) { /* ignore */ }
+      document.addEventListener('keydown', onKey);
+      var first = actions.querySelector('button');
+      if (first) { try { first.focus(); } catch (e4) { /* ignore */ } }
+    });
+  }
   function deleteTask(project, run) {
     var projectName = str(project && project.name) || str(project && project.id) || '项目';
     var taskName = str(run && run.title) || str(run && run.id) || '任务';
-    if (!confirm('删除任务「' + taskName + '」？\n\n计划、事件和看板数据都会删除，不可恢复。')) return;
-    apiPost('/api/task/delete', {
-      projectId: str(project.id), taskId: str(run.id), confirm: true
-    }).then(function () {
-      toast('已删除任务：' + taskName);
-      fetchState();
-    }).catch(function (err) {
-      toast('删除失败：' + err.message, 'err');
+    showDialog({
+      title: '删除任务',
+      body: '「' + taskName + '」\n\n计划、事件和看板数据都会删除，不可恢复。',
+      buttons: [
+        { label: '取消', value: null },
+        { label: '删除任务', value: 'delete', kind: 'danger' }
+      ]
+    }).then(function (value) {
+      if (value !== 'delete') return;
+      apiPost('/api/task/delete', {
+        projectId: str(project.id), taskId: str(run.id), confirm: true
+      }).then(function () {
+        toast('已删除任务：' + taskName);
+        fetchState();
+      }).catch(function (err) {
+        toast('删除失败：' + err.message, 'err');
+      });
     });
   }
   function deleteProject(project) {
     var name = str(project && project.name) || str(project && project.id) || '项目';
-    if (!confirm('从看板删除会话项目「' + name + '」？')) return;
-    var purge = confirm('是否同时删除磁盘上的会话任务数据？\n\n确定 = 删除数据；取消 = 仅从看板移除。');
-    apiPost('/api/project/delete', {
-      projectId: str(project.id), confirm: true, purge: purge
-    }).then(function () {
-      toast('已删除项目：' + name);
-      if (state.route && str(state.route.projectId) === str(project.id)) navigate('/');
-      else fetchState();
-    }).catch(function (err) {
-      toast('删除失败：' + err.message, 'err');
+    showDialog({
+      title: '删除会话项目',
+      body: '「' + name + '」\n\n仅移除看板：保留磁盘数据；\n删除磁盘数据：同时删除该会话的任务数据，不可恢复。',
+      buttons: [
+        { label: '取消', value: null },
+        { label: '仅移除看板', value: 'board' },
+        { label: '删除磁盘数据', value: 'purge', kind: 'danger' }
+      ]
+    }).then(function (value) {
+      if (!value) return;
+      apiPost('/api/project/delete', {
+        projectId: str(project.id), confirm: true, purge: value === 'purge'
+      }).then(function () {
+        toast('已删除项目：' + name);
+        if (state.route && str(state.route.projectId) === str(project.id)) navigate('/');
+        else fetchState();
+      }).catch(function (err) {
+        toast('删除失败：' + err.message, 'err');
+      });
     });
   }
   function pollOnce() {
