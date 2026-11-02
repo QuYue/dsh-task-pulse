@@ -26,7 +26,10 @@ DSH 输入框上方的 live-progress 卡片（静态骨架阶段）。
 3. `tests/test_board.py` 的 CORS 测试通过；
 4. 实际 DSH 内渲染要等 B4 安装后验证。
 
-## 安装（B4 再做，先记录）
+## 安装（B4）
+
+见 [../docs/b4-install.md](../docs/b4-install.md)，或直接运行 `./install.sh`。
+
 
 ```bash
 # 1) 装进 Desktop profile（本地包）
