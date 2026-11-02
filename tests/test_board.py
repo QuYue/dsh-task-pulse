@@ -132,6 +132,15 @@ class BoardTestCase(unittest.TestCase):
         with urllib.request.urlopen(request, timeout=5) as response:
             return json.loads(response.read())
 
+    def post_json(self, path, payload):
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}{path}",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return json.loads(response.read())
+
     # -- prune helpers ---------------------------------------------------
     def init_runs(self, *run_ids):
         """Create one run per id; later ids get newer directory mtimes."""
@@ -273,6 +282,38 @@ class BoardTestCase(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.post_ingest(bad)
         self.assertEqual(caught.exception.code, 403)
+
+    def test_delete_task_api(self):
+        self.init()
+        self.start_server()
+        task_id = self.run_dir().name
+        result = self.post_json("/api/task/delete", {
+            "projectId": self.session, "taskId": task_id, "confirm": True,
+        })
+        self.assertTrue(result["ok"])
+        self.assertFalse((self.session_root() / "tasks" / task_id).exists())
+        self.wait_state(lambda data: any(
+            p["id"] == self.session and not p["runs"] for p in data["projects"]))
+
+    def test_delete_project_api_purges_local_session(self):
+        self.init()
+        self.start_server()
+        result = self.post_json("/api/project/delete", {
+            "projectId": self.session, "confirm": True, "purge": True,
+        })
+        self.assertTrue(result["ok"])
+        self.assertFalse(self.session_root().exists())
+        projects = json.loads((self.home / "projects.json").read_text())["projects"]
+        self.assertNotIn(self.session, projects)
+
+    def test_delete_requires_confirm(self):
+        self.init()
+        self.start_server()
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.post_json("/api/task/delete", {
+                "projectId": self.session, "taskId": self.run_dir().name,
+            })
+        self.assertEqual(caught.exception.code, 400)
 
     def test_push_sends_local_run_to_hub(self):
         self.init()

@@ -44,7 +44,8 @@ the path directly) or `ingest` (remote pushes into `inbox`).
 | `close [--by lead]` | require terminal steps, mark run completed |
 | `prune --keep N [--dry-run] [--yes]` | delete oldest runs beyond N; running runs are skipped |
 | `serve [--port 8770] [--home H] [--open]` | hub server |
-| `project add/list/remove` | manage ingest projects + tokens |
+| `project add/list/remove [--purge]` | manage projects; `remove --purge` also deletes local session data or ingest inbox |
+| `task rm TASK_ID [--project ID]` | delete one task directory |
 | `push --to URL --project-id ID` | remote client: push local run deltas to a hub |
 
 Global flags: `--home PATH`, `--root PATH` (progress root; default `./.dsh/progress`),
@@ -63,6 +64,8 @@ All on the hub (default `http://127.0.0.1:8770`).
 | `/api/health` | GET | `{"ok":true}` |
 | `/api/presence` | POST | `{"clientId":"..."}` page is open (suppresses OS notifications) |
 | `/api/ingest` | POST (JSON body) or GET `?payload=<urlencoded JSON>` | remote push |
+| `/api/task/delete` | POST `{projectId, taskId, confirm:true}` | delete one task directory |
+| `/api/project/delete` | POST `{projectId, confirm:true, purge?:bool}` | unregister project; purge removes local session dir or ingest inbox |
 
 Ingest payload:
 

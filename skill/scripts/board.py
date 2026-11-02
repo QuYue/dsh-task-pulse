@@ -311,12 +311,49 @@ def unregister_project(home: Path, project_id: str, purge: bool = False) -> bool
         if entry is None:
             return False
         _save_projects_locked(home, data)
-    if purge and entry.get("kind") == "ingest":
-        purge_dir = home / "inbox" / project_id
-        if purge_dir.exists():
-            import shutil
-            shutil.rmtree(purge_dir, ignore_errors=True)
+    if purge:
+        if entry.get("kind") == "ingest":
+            purge_dir = home / "inbox" / project_id
+            if purge_dir.exists():
+                shutil.rmtree(purge_dir, ignore_errors=True)
+        else:
+            source = Path((entry.get("source") or {}).get("path") or "")
+            try:
+                resolved = source.expanduser().resolve()
+                # only delete our own session layout: <root>/sessions/<sessionId>
+                if resolved.name == project_id and resolved.parent.name == "sessions" and resolved.exists():
+                    shutil.rmtree(resolved, ignore_errors=True)
+            except OSError:
+                pass
     return True
+
+
+def delete_task(home: Path, project_id: str, task_id: str):
+    """Delete one task directory (local data or remote inbox mirror)."""
+    project_id = slugify(project_id, "project")
+    task_id = slugify(task_id, "task")
+    data = load_projects(home)
+    project = data.get("projects", {}).get(project_id)
+    if project is None:
+        return False, f"unknown project: {project_id}"
+    base = project_base(home, project)
+    target = None
+    for folder_name in ("tasks", "runs"):
+        candidate = base / folder_name / task_id
+        if (candidate / "plan.json").exists():
+            target = candidate
+            break
+    if target is None:
+        return False, f"unknown task: {task_id}"
+    try:
+        resolved = target.resolve()
+        base_resolved = base.resolve()
+        if resolved.parent.parent != base_resolved or resolved.parent.name not in ("tasks", "runs"):
+            return False, "refusing to delete outside the task directory"
+        shutil.rmtree(resolved)
+    except OSError as exc:
+        return False, str(exc)
+    return True, None
 
 
 def list_projects(home: Path) -> list:
@@ -1266,6 +1303,31 @@ class Handler(BaseHTTPRequestHandler):
             status, obj = self.hub.ingest(payload)
             self._send_json(status, obj)
             return
+        if parsed.path == "/api/task/delete":
+            try:
+                payload = json.loads(self._read_body() or b"{}")
+            except Exception:
+                payload = {}
+            if payload.get("confirm") is not True:
+                self._send_json(400, {"ok": False, "error": "confirm is required"})
+                return
+            ok, error = delete_task(self.hub.home, str(payload.get("projectId") or ""),
+                                    str(payload.get("taskId") or ""))
+            self._send_json(200 if ok else 400, {"ok": ok, "error": error})
+            return
+        if parsed.path == "/api/project/delete":
+            try:
+                payload = json.loads(self._read_body() or b"{}")
+            except Exception:
+                payload = {}
+            if payload.get("confirm") is not True:
+                self._send_json(400, {"ok": False, "error": "confirm is required"})
+                return
+            project_id = str(payload.get("projectId") or "")
+            ok = unregister_project(self.hub.home, project_id, purge=bool(payload.get("purge")))
+            self._send_json(200 if ok else 400,
+                            {"ok": ok, "error": None if ok else "unknown project"})
+            return
         self._send_json(404, {"ok": False, "error": "not found"})
 
     def _serve_template(self):
@@ -2007,6 +2069,17 @@ def cmd_migrate(args) -> int:
     return 0
 
 
+def cmd_task(args) -> int:
+    home = resolve_home(args)
+    project_id = args.project or resolve_session_id(args)
+    ok, error = delete_task(home, project_id, args.task_id)
+    if not ok:
+        print(f"delete task failed: {error}", file=sys.stderr)
+        return 1
+    print(f"deleted task {args.task_id} from {project_id}")
+    return 0
+
+
 def cmd_project(args) -> int:
     home = resolve_home(args)
     if args.project_cmd == "list":
@@ -2229,6 +2302,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--template")
     p.add_argument("--allow-remote", action="store_true")
     p.set_defaults(func=cmd_serve)
+
+    p = sub.add_parser("task", parents=[common], help="manage tasks")
+    p_sub = p.add_subparsers(dest="task_cmd", required=True)
+    p_rm = p_sub.add_parser("rm", parents=[common])
+    p_rm.add_argument("task_id")
+    p_rm.add_argument("--project", help="project/session id (default: current session)")
+    p.set_defaults(func=cmd_task)
 
     p = sub.add_parser("project", parents=[common], help="manage registered projects")
     p_sub = p.add_subparsers(dest="project_cmd", required=True)

@@ -1,6 +1,6 @@
 ## live-progress
 
-多步任务、派生子 agent 或启动后台任务时，加载 `live-progress` skill 并记账：
+当用户要求实时进度，或任务本身需要（多步/长时间/多 agent/后台/远程）时，再加载 `live-progress` 并记账；普通任务不要用。
 
 - Lead：`board.py init` 建计划、`revise` 改计划、`close` 收尾；
 - 子 agent / 后台命令：`board.py start / heartbeat / done / fail`，长命令用 `board.py exec` 自动记账；

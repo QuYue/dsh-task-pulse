@@ -291,6 +291,22 @@
   .steps th:nth-child(8) { width: 168px; }
   .steps td { padding: 5px 8px; }
   .cell-start, .cell-end { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .card-del {
+    margin-left: auto; width: 22px; height: 22px; border-radius: 6px; cursor: pointer;
+    background: rgba(255, 95, 109, .08); border: 1px solid rgba(255, 95, 109, .28);
+    color: #ff9aa3; font-size: 14px; line-height: 1; padding: 0; flex: none;
+  }
+  .card-del:hover { background: rgba(255, 95, 109, .2); }
+  .row-del {
+    font-size: 11px; padding: 2px 7px; border-radius: 5px; cursor: pointer;
+    background: rgba(255, 95, 109, .08); border: 1px solid rgba(255, 95, 109, .28);
+    color: #ff9aa3; font-family: inherit;
+  }
+  .row-del:hover { background: rgba(255, 95, 109, .2); }
+  .btn.danger { color: #ffb3b9; border-color: rgba(255, 95, 109, .4); background: rgba(255, 95, 109, .08); }
+  .btn.danger:hover { background: rgba(255, 95, 109, .18); }
+  table.tasks th:last-child { width: 64px; }
+  .cell-act { text-align: right; }
   .note-mark {
     font-size: 10px; line-height: 1.6; color: var(--amber); background: rgba(255, 180, 84, .1);
     border: 1px solid rgba(255, 180, 84, .35); border-radius: 4px; padding: 0 4px;
@@ -1228,8 +1244,8 @@
     var thead = mk('thead');
     var headRow = mk('tr');
     var labels = showProject === false
-      ? ['状态', '任务', '进度', '当前', '计划', '最后更新']
-      : ['状态', '项目', '任务', '进度', '当前', '计划', '最后更新'];
+      ? ['状态', '任务', '进度', '当前', '计划', '最后更新', '操作']
+      : ['状态', '项目', '任务', '进度', '当前', '计划', '最后更新', '操作'];
     for (var h = 0; h < labels.length; h++) headRow.appendChild(mk('th', '', labels[h]));
     thead.appendChild(headRow);
     table.appendChild(thead);
@@ -1302,6 +1318,14 @@
       meta.appendChild(span('meta-item', '最后活动 '));
       meta.appendChild(agoEl(last, null));
     }
+    var projectDel = mk('button', 'btn small danger', '删除项目');
+    projectDel.type = 'button';
+    projectDel.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteProject(project);
+    });
+    meta.appendChild(projectDel);
     hero.appendChild(meta);
     page.appendChild(hero);
 
@@ -1373,6 +1397,18 @@
     var timeCell = mk('td');
     timeCell.appendChild(agoEl(str(run.updatedAt), null));
     tr.appendChild(timeCell);
+
+    var actCell = mk('td', 'cell-act');
+    var delBtn = mk('button', 'row-del', '删除');
+    delBtn.type = 'button';
+    delBtn.title = '删除任务';
+    delBtn.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteTask(project, run);
+    });
+    actCell.appendChild(delBtn);
+    tr.appendChild(actCell);
 
     tr.addEventListener('click', function () { navigate(url); });
     tr.addEventListener('keydown', function (event) {
@@ -1447,6 +1483,16 @@
     if (kb) head.appendChild(kb);
     var src = str(project.sourceStatus);
     if (src && src !== 'ok') head.appendChild(mk('span', 'chip warn', '数据源 ' + src));
+    var cardDel = mk('button', 'card-del', '×');
+    cardDel.type = 'button';
+    cardDel.title = '删除项目';
+    cardDel.setAttribute('aria-label', '删除项目');
+    cardDel.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteProject(project);
+    });
+    head.appendChild(cardDel);
     card.appendChild(head);
 
     var runLine = mk('div', 'pc-run');
@@ -2005,6 +2051,44 @@
         if (!applySnapshot(data)) throw new Error('invalid snapshot');
         return true;
       });
+  }
+  function apiPost(path, payload) {
+    return fetch(path, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok || !data.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        return data;
+      });
+    });
+  }
+  function deleteTask(project, run) {
+    var projectName = str(project && project.name) || str(project && project.id) || '项目';
+    var taskName = str(run && run.title) || str(run && run.id) || '任务';
+    if (!confirm('删除任务「' + taskName + '」？\n\n计划、事件和看板数据都会删除，不可恢复。')) return;
+    apiPost('/api/task/delete', {
+      projectId: str(project.id), taskId: str(run.id), confirm: true
+    }).then(function () {
+      toast('已删除任务：' + taskName);
+      fetchState();
+    }).catch(function (err) {
+      toast('删除失败：' + err.message, 'err');
+    });
+  }
+  function deleteProject(project) {
+    var name = str(project && project.name) || str(project && project.id) || '项目';
+    if (!confirm('从看板删除会话项目「' + name + '」？')) return;
+    var purge = confirm('是否同时删除磁盘上的会话任务数据？\n\n确定 = 删除数据；取消 = 仅从看板移除。');
+    apiPost('/api/project/delete', {
+      projectId: str(project.id), confirm: true, purge: purge
+    }).then(function () {
+      toast('已删除项目：' + name);
+      if (state.route && str(state.route.projectId) === str(project.id)) navigate('/');
+      else fetchState();
+    }).catch(function (err) {
+      toast('删除失败：' + err.message, 'err');
+    });
   }
   function pollOnce() {
     if (state.polling) return;
