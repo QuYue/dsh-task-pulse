@@ -38,7 +38,7 @@ try:  # POSIX only; the skill targets macOS/Linux
 except Exception:  # pragma: no cover
     fcntl = None
 
-VERSION = "1.0"
+VERSION = "1.0.0"
 SCHEMA = 1
 DEFAULT_PORT = 8770
 DEFAULT_HOST = "127.0.0.1"

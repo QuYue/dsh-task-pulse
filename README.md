@@ -46,6 +46,12 @@ live-progress/
 └── docs/{contract.md,state.sample.json}
 ```
 
+## 版本
+
+- **v1.0.0**（当前）：网页看板 + 文件驱动账本，详见 [CHANGELOG.md](CHANGELOG.md)
+- **v2（进行中）**：DSH 输入框上方的原生进度卡片（与网页版并存），
+  规格见 [docs/v2-card-spec.md](docs/v2-card-spec.md)
+
 ## 安装为 DSH skill
 
 任选其一，DSH 会自动发现并热加载：
