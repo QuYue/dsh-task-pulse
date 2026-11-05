@@ -67,34 +67,34 @@ Session（DSH 会话 / 工作区）
 
 ## 安装
 
-### 单包安装（推荐）
+### DSH 0.2.2+（推荐）
+
+本包是一个 DSH **bundle**，通过 Plugin Manager 安装，不再手动改 `cordis.patch.yml`。
+
+1. 打开 **Settings → Plugins → Add plugin**；
+2. 输入本仓库的绝对路径，例如：
+
+```text
+/Users/quyue/My_Data/My_Projects/DeepSeek_Harness/dsh-task-pulse
+```
+
+3. 安装后确认插件列表出现 `@quyue/dsh-task-pulse`；
+4. 重启 DSH Desktop（client bundle 需要重启加载）。
+
+也可以执行：
 
 ```bash
-git clone https://github.com/QuYue/dsh-task-pulse.git
-cd dsh-task-pulse
-./install.sh desktop
+./install.sh
 ```
 
-脚本会：
+脚本只打印当前 checkout 的安装路径，不会修改 profile。
 
-1. 在 `~/.dsh/profiles/desktop/node_modules/@quyue/dsh-task-pulse` 建立到本仓库的 symlink；
-2. 在 `cordis.patch.yml` 追加 loader 条目：
+### 旧版 DSH（0.2.1）
 
-```yaml
-- insert:
-    - id: task-pulse
-      name: "@quyue/dsh-task-pulse"
-```
+旧版使用 local symlink + `cordis.patch.yml` 的 `insert` 条目；0.2.2 起请用上面的
+Plugin Manager 方式。卸载同样在 **Settings → Plugins** 中操作。
 
-安装后**重启 DSH Desktop**。不再需要 `~/.dsh/skills/live-progress` symlink——skill 由插件
-通过官方 provider 注册。
-
-卸载：
-
-```bash
-rm ~/.dsh/profiles/desktop/node_modules/@quyue/dsh-task-pulse
-# 从 cordis.patch.yml 删除 task-pulse 的 insert 条目
-```
+安装后不再需要 `~/.dsh/skills/live-progress` symlink——skill 由插件通过官方 provider 注册。
 
 ## 使用
 

@@ -1,6 +1,6 @@
 {
   "name": "@quyue/dsh-task-pulse",
-  "version": "3.5.2",
+  "version": "3.6.0",
   "description": "TaskPulse: live task progress for DSH — skill provider, /tp command, and composer card.",
   "type": "module",
   "license": "MIT",
@@ -30,20 +30,19 @@
   "files": [
     "lib",
     "assets",
+    "cordis.patch.yml",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
   ],
   "dsh": {
     "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web"
     }
-  },
-  "peerDependencies": {
-    "@deepseek-ai/dsh-commands": "0.2.1-rc.5",
-    "@deepseek-ai/dsh-skill": "0.2.1-rc.5",
-    "@deepseek-ai/cordis": "~4.0.5"
   },
   "publishConfig": {
     "access": "public"

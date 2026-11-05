@@ -1,0 +1,3 @@
+- insert:
+    - id: task-pulse
+      name: "@quyue/dsh-task-pulse"

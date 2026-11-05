@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.6.0 — 2026-11-05
+
+- 适配 DSH 0.2.2 Plugin Manager：
+  - package 增加 `dsh.bundle.patch` 与 `cordis.patch.yml`；
+  - 通过 Plugin Manager / 本地 bundle 安装，不再手动改 profile patch；
+  - 命令增加 `definitionId`；
+- 更新安装文档与 install.sh。
+
 ## v3.5.2 — 2026-11-03
 
 - 卡片底部只保留「步骤 N 个」；
